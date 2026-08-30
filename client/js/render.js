@@ -341,8 +341,8 @@ export function drawRoomLobby(ctx, S, act) {
 // ── 牌桌 ────────────────────────────────────────────
 // 座位显示位（main.js 的 seatDisplayPos 同一套几何）
 // 英雄特殊：名牌实际绘制在左下角，下注/收池/浮字都以名牌附近为基准
-const HERO_BASE = { x: 183, y: 428 }; // 英雄名牌中心附近（drawHero 名牌 108..258 × 422..474）
-const HERO_BET = { x: 296, y: 392 };  // 与手牌中心 (270, 406) 上沿贴合，筹码落地不脱离牌区
+const HERO_BASE = { x: 275, y: 428 }; // 与 drawHero 名牌中心对齐（hero 名牌 200..350）
+const HERO_BET = { x: 388, y: 392 };  // 紧贴 hero 手牌中心 (362, 406) 上沿
 export function seatDisplayPos(snap, seat) {
   if (!snap || !snap.you || seat == null || seat < 0) return null;
   if (snap.you.seat >= 0 && seat === snap.you.seat) return { ...HERO_BASE };
