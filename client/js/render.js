@@ -342,7 +342,7 @@ export function drawRoomLobby(ctx, S, act) {
 // 座位显示位（main.js 的 seatDisplayPos 同一套几何）
 // 英雄特殊：名牌实际绘制在左下角，下注/收池/浮字都以名牌附近为基准
 const HERO_BASE = { x: 183, y: 428 }; // 英雄名牌中心附近（drawHero 名牌 108..258 × 422..474）
-const HERO_BET = { x: 310, y: 312 };  // 英雄下注位（手牌上方、朝底池方向的空档）
+const HERO_BET = { x: 296, y: 392 };  // 与手牌中心 (270, 406) 上沿贴合，筹码落地不脱离牌区
 export function seatDisplayPos(snap, seat) {
   if (!snap || !snap.you || seat == null || seat < 0) return null;
   if (snap.you.seat >= 0 && seat === snap.you.seat) return { ...HERO_BASE };
@@ -472,9 +472,9 @@ export function drawTable(ctx, S, act) {
     drawSeat(ctx, s, seatPos(dIdx, n, false), { plateW, plateH, snap, hand, isWinner: winners.has(s.seat), cx, cy, act, mini, highlight });
   }
 
-  // 底部区：自己
-  const hero = snap.seats.find(s => !s.empty && s.seat === mySeat);
-  if (hero && mySeat >= 0) {
+  // 底部区：自己（sittingOut 或无筹码时走 spectator，不再画名牌/手牌）
+  const hero = snap.seats.find(s2 => !s2.empty && s2.seat === mySeat);
+  if (hero && mySeat >= 0 && !hero.sittingOut && hero.chips > 0) {
     drawHero(ctx, hero, snap, hand, winners.has(mySeat), act, highlight);
   } else {
     drawSpectator(ctx, snap, act);

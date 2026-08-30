@@ -107,6 +107,10 @@ const CHIP_COLORS = [
 const CHIP_GOLD = { face: '#e6b84c', edge: '#9a7726' };
 
 export function flyChips(x, y, tx, ty, opts = {}) {
+  // 坐标越界或非数保护（防止任何一帧 NaN 让粒子飞到无穷远）
+  const safe = v => (Number.isFinite(v) ? v : 480);
+  x = safe(x); y = safe(y); tx = safe(tx); ty = safe(ty);
+  if (Math.abs(tx) > 5000 || Math.abs(ty) > 5000) return;
   const n = opts.n || 5;
   const gold = opts.kind === 'collect';
   const size = gold ? 7 : 5.5;
