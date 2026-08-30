@@ -1,0 +1,85 @@
+@font-face {
+  font-family: 'FusionPixel';
+  src: url('/assets/fonts/fusion-pixel-12px-proportional-zh_hans.ttf.woff2') format('woff2');
+  font-display: swap;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0c0a18;
+  font-family: 'FusionPixel', 'Microsoft YaHei', sans-serif;
+}
+
+#stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center center;
+}
+
+#game {
+  display: block;
+  width: 960px;   /* 逻辑显示尺寸；物理分辨率 1920×1080（2x 细腻渲染） */
+  height: 540px;
+  background: #171130;
+}
+
+/* CRT 覆盖层：轻微扫描线 + 柔和暗角 */
+#crt {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.055) 0px,
+      rgba(0, 0, 0, 0.055) 1px,
+      rgba(255, 255, 255, 0.008) 2px,
+      rgba(255, 255, 255, 0.008) 3px
+    ),
+    radial-gradient(
+      ellipse at center,
+      rgba(0, 0, 0, 0) 60%,
+      rgba(5, 2, 18, 0.30) 100%
+    );
+  mix-blend-mode: multiply;
+  animation: crt-flicker 6s infinite steps(90);
+}
+
+#crt::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 0, 80, 0.018),
+    rgba(0, 255, 160, 0.012) 50%,
+    rgba(80, 80, 255, 0.018)
+  );
+}
+
+@keyframes crt-flicker {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.97; }
+}
+
+/* DOM 输入框（菜单昵称 / 房间码） */
+#dom-input {
+  position: absolute;
+  display: none;
+  background: #14102b;
+  border: 2px solid #f4efe3;
+  box-shadow: 0 3px 0 #00000088;
+  color: #ffd76e;
+  font-family: 'FusionPixel', 'Microsoft YaHei', sans-serif;
+  font-size: 20px;
+  text-align: center;
+  outline: none;
+  caret-color: #ffd76e;
+  z-index: 10;
+}
+#dom-input:focus { border-color: #ff9f43; }

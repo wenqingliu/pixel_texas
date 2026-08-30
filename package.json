@@ -1,0 +1,14 @@
+{
+  "name": "pixel-texas",
+  "version": "1.0.0",
+  "description": "小丑牌画风的德州扑克 — 联网房间对战 + 机器人",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node test/run_all.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
