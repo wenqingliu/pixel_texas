@@ -738,6 +738,7 @@ function drawSeat(ctx, s, pos, o) {
 }
 
 function drawHero(ctx, s, snap, hand, isWinner, act, highlight) {
+  ctx.save(); // 防御：drawHero 内部修改 ctx.fillStyle/strokeStyle 但 drawCard 自己 restore；外层 save/restore 防万一
   const th = getTheme();
   const x = 56, y = H - 118;
   // 头像（倒计时条在操作面板顶部，不再画头像环）
@@ -804,6 +805,7 @@ function drawHero(ctx, s, snap, hand, isWinner, act, highlight) {
     drawPixelText(ctx, 'D', x + 164, y + 36, 12, '#1b1638', 'center');
   }
   void act;
+  ctx.restore();
 }
 
 function drawSpectator(ctx, snap, act) {
