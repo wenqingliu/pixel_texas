@@ -243,8 +243,7 @@ export function drawCard(ctx, x, y, w, h, card, faceUp, opts = {}) {
       const cornerPipH = h * 0.09;
       drawPixelText(ctx, rank, -hw + m, -hh + m, rankSize, color);
       drawSuit(ctx, suit, -hw + m + rankSize * 0.45, -hh + m + rankSize + cornerPipH / 2 + 2, cornerPipH, color);
-      ctx.save();
-      // 中央区域
+      // 中央区域（无变换，仅坐标计算；不再 save/restore 减少堆栈深度）
       const ri = card >> 2; // 0='2' ... 8='10' 9='J' 10='Q' 11='K' 12='A'
       const fy0 = -hh + m + rankSize + cornerPipH + 8;
       const fy1 = hh - m - rankSize * 0.5 - cornerPipH - 5;

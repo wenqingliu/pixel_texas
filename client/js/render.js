@@ -341,8 +341,9 @@ export function drawRoomLobby(ctx, S, act) {
 // ── 牌桌 ────────────────────────────────────────────
 // 座位显示位（main.js 的 seatDisplayPos 同一套几何）
 // 英雄特殊：名牌实际绘制在左下角，下注/收池/浮字都以名牌附近为基准
-const HERO_BASE = { x: 275, y: 428 }; // 与 drawHero 名牌中心对齐（hero 名牌 200..350）
-const HERO_BET = { x: 388, y: 392 };  // 紧贴 hero 手牌中心 (362, 406) 上沿
+// drawHero 中：x=56 名牌 px=x+52=108 → fillRect(108, 422, 150, 52) → 名牌中心 (183, 448)
+const HERO_BASE = { x: 183, y: 448 }; // 英雄名牌中心（与 drawHero 实际 fillRect 几何一致）
+const HERO_BET = { x: 296, y: 392 };  // 紧贴 hero 手牌中心 (270, 406) 上沿
 export function seatDisplayPos(snap, seat) {
   if (!snap || !snap.you || seat == null || seat < 0) return null;
   if (snap.you.seat >= 0 && seat === snap.you.seat) return { ...HERO_BASE };
@@ -1330,16 +1331,23 @@ function drawResultsBanner(ctx, snap, results) {
       ? `${name} 收下底池 +${fmt(r.win)}`
       : `${name} 以【${r.name}】赢得 +${fmt(r.win)}`);
   }
-  const y = 64;
-  ctx.fillStyle = 'rgba(12, 9, 26, 0.88)';
+  // 顶部名牌 y≈50..95（6+ 人桌更靠上），横幅 y=64 会和顶部名牌叠加。
+  // 改放到顶部更靠上的位置（y=18）+ 自身 save/restore 兜底，
+  // 万一上层漏了变换也不会把整条横幅画歪。
+  const y = 18;
   const wmax = Math.max(...lines.map(l => l.length)) * 17 + 60;
-  ctx.fillRect(W / 2 - wmax / 2, y - 12, wmax, 24 + lines.length * 22);
+  const bx = W / 2 - wmax / 2, bh = 24 + lines.length * 22;
+  ctx.save();
+  ctx.setTransform(2, 0, 0, 2, 0, 0); // 抵消调用方可能漏的 transform
+  ctx.fillStyle = 'rgba(12, 9, 26, 0.92)';
+  ctx.fillRect(bx, y - 12, wmax, bh);
   ctx.strokeStyle = '#ffd76e';
   ctx.lineWidth = 2;
-  ctx.strokeRect(W / 2 - wmax / 2 + 1, y - 11, wmax - 2, 22 + lines.length * 22);
+  ctx.strokeRect(bx + 1, y - 11, wmax - 2, bh - 2);
   lines.forEach((l, i) => {
     drawPixelText(ctx, l, W / 2, y + i * 22, 15, i === 0 ? '#ffd76e' : '#f4efe3', 'center', '#0c0a18');
   });
+  ctx.restore();
 }
 
 // ── 连接遮罩 ────────────────────────────────────────
