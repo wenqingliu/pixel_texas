@@ -343,7 +343,8 @@ export function drawRoomLobby(ctx, S, act) {
 // 英雄特殊：名牌实际绘制在左下角，下注/收池/浮字都以名牌附近为基准
 // drawHero 中：x=56 名牌 px=x+52=108 → fillRect(108, 422, 150, 52) → 名牌中心 (183, 448)
 const HERO_BASE = { x: 183, y: 448 }; // 英雄名牌中心（与 drawHero 实际 fillRect 几何一致）
-const HERO_BET = { x: 296, y: 392 };  // 紧贴 hero 手牌中心 (270, 406) 上沿
+// 自己下注位：放名牌/手牌右前方，避开胜率（y=384）/手牌名（y=364）这些牌上沿的 UI
+const HERO_BET = { x: 430, y: 440 };  // 手牌右侧、桌沿外侧，符合"玩家面前的台面"惯例
 export function seatDisplayPos(snap, seat) {
   if (!snap || !snap.you || seat == null || seat < 0) return null;
   if (snap.you.seat >= 0 && seat === snap.you.seat) return { ...HERO_BASE };
@@ -359,7 +360,7 @@ export function seatDisplayPos(snap, seat) {
 const POT_RECT = { l: 405, r: 555, t: 112, b: 190 }; // 底池文字+筹码堆的占用范围
 export function betSpotFor(snap, seat) {
   if (snap && snap.you && snap.you.seat >= 0 && seat === snap.you.seat) {
-    return { ...HERO_BET }; // 英雄下注位固定在手牌上方空档
+    return { ...HERO_BET }; // 英雄下注位：手牌右侧、牌桌外
   }
   const p = seatDisplayPos(snap, seat) || { x: 480, y: 240 };
   let x = p.x + (480 - p.x) * 0.42;
