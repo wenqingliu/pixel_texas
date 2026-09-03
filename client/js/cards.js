@@ -240,8 +240,8 @@ export function drawCard(ctx, x, y, w, h, card, faceUp, opts = {}) {
       // ── 极简牌面：左上角标（数字+小花色）+ 右下大花色/公仔，中央留白 ──
       const m = 6;
       const rankSize = Math.floor(h * 0.22);
-      const smallPipH = h * 0.1;
-      const bigPipH = h * 0.45;
+      const smallPipH = h * 0.15;  // 小花色放大约 50%，角标区更醒目
+      const bigPipH = h * 0.42;
       const ri = card >> 2; // 0='2' ... 8='10' 9='J' 10='Q' 11='K' 12='A'
 
       // 左上：数字
@@ -251,13 +251,13 @@ export function drawCard(ctx, x, y, w, h, card, faceUp, opts = {}) {
       const rankW = ctx.measureText(rank).width;
       drawSuit(ctx, suit, -hw + m + rankW / 2, -hh + m + rankSize + 2, smallPipH, color);
 
-      // 右下：大花色（或公仔 for J/Q/K）
+      // 右下：大花色 +（JQK 加公仔）
       const bigCx = hw - m - bigPipH / 2;
       const bigCy = hh - m - bigPipH / 2;
+      drawSuit(ctx, suit, bigCx, bigCy, bigPipH, color);
       if (ri >= 9) {
+        // J/Q/K：公仔叠在大花色上方（公仔不透明，背景花色被覆盖但能看出）
         drawCourt(ctx, ri - 9, bigCx, bigCy, bigPipH, color);
-      } else {
-        drawSuit(ctx, suit, bigCx, bigCy, bigPipH, color);
       }
     } else {
       // 迷你牌：居中点数 + 下方花色
