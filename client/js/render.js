@@ -1211,31 +1211,46 @@ function drawToast(ctx, S) {
 
 // ── 摊牌牌型标签与赢家飞行动画 ──────────────────────
 // 行动时限条：像素分段进度条，随剩余时间由主题色→橙→红（低时脉冲）
+// 计时条：单条动态进度，按 t 由绿到红渐变（绿 #66bb6a → 黄 #ffd76e → 红 #ef5350）
+function timeBarColor(t) {
+  let r, g, b;
+  if (t > 0.5) {
+    // 绿→黄，k: 0 (t=0.5) → 1 (t=1)
+    const k = (t - 0.5) * 2;
+    r = Math.round(102 + (255 - 102) * k);
+    g = Math.round(187 + (215 - 187) * k);
+    b = Math.round(106 + (110 - 106) * k);
+  } else {
+    // 黄→红，k: 0 (t=0) → 1 (t=0.5)
+    const k = t * 2;
+    r = Math.round(239 + (255 - 239) * k);
+    g = Math.round(83 + (215 - 83) * k);
+    b = Math.round(80 + (110 - 80) * k);
+  }
+  return `rgb(${r},${g},${b})`;
+}
+
 function drawTimeBar(ctx, x, y, w, frac) {
-  const th = getTheme();
-  const segs = 14;
-  const segW = (w - (segs - 1) * 2) / segs;
   const f = Math.max(0, Math.min(1, frac));
-  const lit = Math.round(f * segs);
-  const low = f < 0.25;
+  const H = 8;
+  // 背景框
   ctx.fillStyle = 'rgba(10, 8, 22, 0.85)';
-  ctx.fillRect(x - 2, y - 2, w + 4, 9);
+  ctx.fillRect(x - 2, y - 2, w + 4, H + 4);
   ctx.strokeStyle = 'rgba(255,255,255,0.18)';
   ctx.lineWidth = 1;
-  ctx.strokeRect(x - 1.5, y - 1.5, w + 3, 8);
-  let col = th.accent2;
-  if (f < 0.5) col = '#ff9f43';
-  if (low) col = Math.sin(FX.t * 10) > 0 ? '#ef5350' : '#b73a3a';
-  for (let i = 0; i < segs; i++) {
-    const on = i < lit;
-    ctx.globalAlpha = on ? (low ? 0.7 + 0.3 * Math.sin(FX.t * 10 + i * 0.7) : 1) : 0.16;
-    ctx.fillStyle = on ? col : '#3a3560';
-    ctx.fillRect(x + i * (segW + 2), y, segW, 5);
+  ctx.strokeRect(x - 1.5, y - 1.5, w + 3, H + 2);
+  // 动态进度条（整条颜色随 t 变化，不分段）
+  const fillW = Math.max(0, w * f);
+  if (fillW > 0) {
+    ctx.fillStyle = timeBarColor(f);
+    ctx.fillRect(x, y, fillW, H);
   }
-  ctx.globalAlpha = 1;
-  if (low) {
-    ctx.strokeStyle = `rgba(239,83,80,${0.35 + 0.4 * Math.abs(Math.sin(FX.t * 10))})`;
-    ctx.strokeRect(x - 2.5, y - 2.5, w + 5, 10);
+  // 低时间闪烁提示（红色边框呼吸）
+  if (f < 0.25) {
+    const alpha = 0.35 + 0.4 * Math.abs(Math.sin(FX.t * 10));
+    ctx.strokeStyle = `rgba(239,83,80,${alpha})`;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x - 2.5, y - 2.5, w + 5, H + 5);
   }
 }
 
