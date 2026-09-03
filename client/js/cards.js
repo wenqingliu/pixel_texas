@@ -254,10 +254,15 @@ export function drawCard(ctx, x, y, w, h, card, faceUp, opts = {}) {
       // 右下：大花色 +（JQK 加公仔）
       const bigCx = hw - m - bigPipH / 2;
       const bigCy = hh - m - bigPipH / 2;
-      drawSuit(ctx, suit, bigCx, bigCy, bigPipH, color);
       if (ri >= 9) {
-        // J/Q/K：公仔叠在大花色上方（公仔不透明，背景花色被覆盖但能看出）
+        // J/Q/K：先画半透明大花色做底色（watermark），再画公仔
+        ctx.save();
+        ctx.globalAlpha = 0.32;
+        drawSuit(ctx, suit, bigCx, bigCy, bigPipH, color);
+        ctx.restore();
         drawCourt(ctx, ri - 9, bigCx, bigCy, bigPipH, color);
+      } else {
+        drawSuit(ctx, suit, bigCx, bigCy, bigPipH, color);
       }
     } else {
       // 迷你牌：居中点数 + 下方花色
