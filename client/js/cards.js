@@ -237,39 +237,27 @@ export function drawCard(ctx, x, y, w, h, card, faceUp, opts = {}) {
     ctx.fill();
 
     if (big) {
-      // ── 传统样式：左上/右下角标 + 中央点阵/宫廷人像 ──
-      const rankSize = Math.floor(h * 0.22);
+      // ── 极简牌面：左上角标（数字+小花色）+ 右下大花色/公仔，中央留白 ──
       const m = 6;
-      const cornerPipH = h * 0.09;
-      drawPixelText(ctx, rank, -hw + m, -hh + m, rankSize, color);
-      drawSuit(ctx, suit, -hw + m + rankSize * 0.45, -hh + m + rankSize + cornerPipH / 2 + 2, cornerPipH, color);
-      // 中央区域（无变换，仅坐标计算；不再 save/restore 减少堆栈深度）
+      const rankSize = Math.floor(h * 0.22);
+      const smallPipH = h * 0.1;
+      const bigPipH = h * 0.45;
       const ri = card >> 2; // 0='2' ... 8='10' 9='J' 10='Q' 11='K' 12='A'
-      const fy0 = -hh + m + rankSize + cornerPipH + 8;
-      const fy1 = hh - m - rankSize * 0.5 - cornerPipH - 5;
-      if (ri === 12) {
-        // A：中央单一大花色
-        drawSuit(ctx, suit, 0, (fy0 + fy1) / 2, Math.min(h * 0.42, fy1 - fy0), color, true);
-      } else if (ri >= 9) {
-        // J/Q/K：宫廷人像
-        drawCourt(ctx, ri - 9, 0, (fy0 + fy1) / 2, Math.min(h * 0.62, fy1 - fy0), color);
+
+      // 左上：数字
+      drawPixelText(ctx, rank, -hw + m, -hh + m, rankSize, color);
+      // 数字正下方：小花色（水平居中对齐数字）
+      ctx.font = `${rankSize}px 'FusionPixel','Microsoft YaHei',sans-serif`;
+      const rankW = ctx.measureText(rank).width;
+      drawSuit(ctx, suit, -hw + m + rankW / 2, -hh + m + rankSize + 2, smallPipH, color);
+
+      // 右下：大花色（或公仔 for J/Q/K）
+      const bigCx = hw - m - bigPipH / 2;
+      const bigCy = hh - m - bigPipH / 2;
+      if (ri >= 9) {
+        drawCourt(ctx, ri - 9, bigCx, bigCy, bigPipH, color);
       } else {
-        // 2-10：传统标准点阵布局
-        const layout = PIP_LAYOUTS[ri];
-        const pipH = Math.min(h * 0.16, (fy1 - fy0) / 4.2);
-        for (const [fx, fy, inv] of layout) {
-          const px2 = -hw + 9 + (w - 18) * fx;
-          const py2 = fy0 + (fy1 - fy0) * fy;
-          if (inv) {
-            ctx.save();
-            ctx.translate(px2, py2);
-            ctx.rotate(Math.PI);
-            drawSuit(ctx, suit, 0, 0, pipH, color);
-            ctx.restore();
-          } else {
-            drawSuit(ctx, suit, px2, py2, pipH, color);
-          }
-        }
+        drawSuit(ctx, suit, bigCx, bigCy, bigPipH, color);
       }
     } else {
       // 迷你牌：居中点数 + 下方花色
