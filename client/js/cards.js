@@ -116,6 +116,7 @@ function courtSprite(kind, phys, color) {
 
 function drawCourt(ctx, kind, cx, cy, hgt, color) {
   const map = COURT_MAPS[kind];
+  if (!map) return; // A/未映射的牌型不画公仔
   const phys = Math.max(2, Math.round((hgt * 2) / map.length));
   const sp = courtSprite(kind, phys, color);
   const lw = sp.width / 2, lh = sp.height / 2;
@@ -249,12 +250,12 @@ export function drawCard(ctx, x, y, w, h, card, faceUp, opts = {}) {
       // 数字正下方：小花色（水平居中对齐数字）
       ctx.font = `${rankSize}px 'FusionPixel','Microsoft YaHei',sans-serif`;
       const rankW = ctx.measureText(rank).width;
-      drawSuit(ctx, suit, -hw + m + rankW / 2, -hh + m + rankSize + 2, smallPipH, color);
+      drawSuit(ctx, suit, -hw + m + rankW / 2, -hh + m + rankSize + 8, smallPipH, color);
 
       // 右下：大花色 +（JQK 加公仔）
       const bigCx = hw - m - bigPipH / 2;
       const bigCy = hh - m - bigPipH / 2;
-      if (ri >= 9) {
+      if (ri >= 9 && ri < 12) {
         // J/Q/K：先画半透明大花色做底色（watermark），再画公仔
         ctx.save();
         ctx.globalAlpha = 0.32;
@@ -262,6 +263,7 @@ export function drawCard(ctx, x, y, w, h, card, faceUp, opts = {}) {
         ctx.restore();
         drawCourt(ctx, ri - 9, bigCx, bigCy, bigPipH, color);
       } else {
+        // A / 数字牌：仅大花色
         drawSuit(ctx, suit, bigCx, bigCy, bigPipH, color);
       }
     } else {
