@@ -340,11 +340,11 @@ export function drawRoomLobby(ctx, S, act) {
 
 // ── 牌桌 ────────────────────────────────────────────
 // 座位显示位（main.js 的 seatDisplayPos 同一套几何）
-// 英雄特殊：名牌实际绘制在左下角，下注/收池/浮字都以名牌附近为基准
-// drawHero 中：x=56 名牌 px=x+52=108 → fillRect(108, 422, 150, 52) → 名牌中心 (183, 448)
-const HERO_BASE = { x: 183, y: 448 }; // 英雄名牌中心（与 drawHero 实际 fillRect 几何一致）
-// 自己下注位：放名牌/手牌右前方，避开胜率（y=384）/手牌名（y=364）这些牌上沿的 UI
-const HERO_BET = { x: 380, y: 348 };  // 牌桌椭圆内（桌 y=102..378）、手牌正前方，避开胜率/手牌名/手牌本体
+// 英雄特殊：名牌紧贴牌桌下沿（cx=400, y=415, plateW=130），手牌整体在名牌右侧（cx=560）
+// 行动面板在右侧 640-948 不动
+const HERO_BASE = { x: 400, y: 415 };
+// 自己下注位：牌桌椭圆内（桌 y=102..378），名牌正前方
+const HERO_BET = { x: 400, y: 350 };
 export function seatDisplayPos(snap, seat) {
   if (!snap || !snap.you || seat == null || seat < 0) return null;
   if (snap.you.seat >= 0 && seat === snap.you.seat) return { ...HERO_BASE };
@@ -418,6 +418,37 @@ export function drawTable(ctx, S, act) {
   drawPixelText(ctx, 'PIXEL TEXAS', cx, cy + 58, 22, th.feltMid, 'center');
   ctx.globalAlpha = 1;
 
+  // 像素筹码 icon（金面 + 暗边 + 中心环 + 4 方向凹槽，呼应底池筹码堆）
+  function drawChipIcon(ctx, cx, cy, r) {
+    ctx.save();
+    // 阴影
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx.beginPath(); ctx.arc(cx + 1, cy + 1.5, r, 0, 7); ctx.fill();
+    // 金面
+    ctx.fillStyle = '#ffd76e';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+    // 暗边
+    ctx.strokeStyle = '#9a7726';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // 中心环
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.42, 0, 7); ctx.stroke();
+    // 4 方向小条
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 2 + Math.PI / 4;
+      const x1 = cx + Math.cos(a) * r * 0.55;
+      const y1 = cy + Math.sin(a) * r * 0.55;
+      const x2 = cx + Math.cos(a) * r * 0.88;
+      const y2 = cy + Math.sin(a) * r * 0.88;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+    // 高光
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath(); ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.18, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+
   // 底池
   const pot = hand ? hand.pot : 0;
   if (pot > anim.displayPot + 0.5) anim.potPulse = 1;
@@ -429,7 +460,19 @@ export function drawTable(ctx, S, act) {
     ctx.save();
     ctx.translate(cx, cy - 122);
     ctx.scale(ps, ps);
-    drawPixelText(ctx, `底池 ${fmt(Math.round(anim.displayPot))}`, 0, 0, 18, (anim.potPulse || 0) > 0.4 ? '#fff3c4' : '#ffd76e', 'center', '#0c0a18');
+    // 像素筹码 icon + "底池 X"（左 icon 右文字，整体居中；用 measureText 精准测宽）
+    const potStr = fmt(Math.round(anim.displayPot));
+    const textStr = `底池 ${potStr}`;
+    const fs = 18, iconR = 8, gap = 6;
+    // 临时设字体测文字实际宽度（与 drawPixelText 同字体）
+    ctx.font = `${fs}px 'FusionPixel','Microsoft YaHei',sans-serif`;
+    const textW = ctx.measureText(textStr).width;
+    const totalW = textW + iconR * 2 + gap;
+    const iconCx = -totalW / 2 + iconR;
+    const textX = iconCx + iconR + gap;
+    // 垂直对齐：文字 top baseline y=0，占 0..fs；芯片中心 y=fs/2 居中对齐
+    drawChipIcon(ctx, iconCx, fs / 2, iconR);
+    drawPixelText(ctx, textStr, textX, 0, fs, (anim.potPulse || 0) > 0.4 ? '#fff3c4' : '#ffd76e', 'left', '#0c0a18');
     ctx.restore();
     drawChipPile(ctx, POT_POS.x, POT_POS.y, Math.round(anim.displayPot));
   }
@@ -612,9 +655,14 @@ function drawSeat(ctx, s, pos, o) {
   ctx.save();
   if (isActor) {
     const pulse = 0.5 + 0.5 * Math.sin(FX.t * 7);
-    ctx.strokeStyle = `rgba(255,159,67,${0.5 + pulse * 0.5})`;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(x - 3, y - 3, plateW + 6, plateH + 6);
+    // 外层呼吸光晕（金黄，亮起时更亮）
+    ctx.strokeStyle = `rgba(255,215,110,${0.35 + pulse * 0.55})`;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(x - 6, y - 6, plateW + 12, plateH + 12);
+    // 内层常亮橙框
+    ctx.strokeStyle = `rgba(255,159,67,${0.75 + pulse * 0.25})`;
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(x - 2, y - 2, plateW + 4, plateH + 4);
   }
   if (isWinner) {
     ctx.fillStyle = 'rgba(255,215,110,0.22)';
@@ -648,9 +696,37 @@ function drawSeat(ctx, s, pos, o) {
   ctx.globalAlpha = s.folded ? 0.55 : 1;
   // 头像
   drawAvatar(ctx, avX, avY, avSize, s.avatar || '', { border: isActor ? th.accent : '#3a3560' });
+  // 状态条：名牌下方紧贴 5 像素(限条之上)，9 像素行
+  // 优先级：弃牌 > 全下 > 行动中(脉冲) > 最近一次动作 > 等待(隐藏)
+  // 持续到手牌结束(不随街切换)
+  {
+    let stLabel = null, stColor = null, stPulse = false;
+    if (s.folded) { stLabel = '已弃牌'; stColor = '#6a6484'; }
+    else if (s.allIn) { stLabel = '全下'; stColor = '#ef5350'; }
+    else if (isActor) {
+      if (s.isBot) { stLabel = '思考中…'; stColor = '#5c8dff'; stPulse = true; }
+      else { stLabel = '行动中…'; stColor = '#ffd76e'; stPulse = true; }
+    } else if (s.lastAction) {
+      const la = s.lastAction;
+      if (la.type === 'check') { stLabel = '看牌'; stColor = '#ffd76e'; }
+      else if (la.type === 'call') { stLabel = `跟注 ${fmt(la.amount)}`; stColor = '#ffd76e'; }
+      else if (la.type === 'raise') {
+        stLabel = la.allIn ? `全下 ${fmt(la.amount)}` : `加注到 ${fmt(la.amount)}`;
+        stColor = la.allIn ? '#ef5350' : '#ffd76e';
+      } else if (la.type === 'fold') { stLabel = '已弃牌'; stColor = '#6a6484'; }
+    }
+    if (stLabel) {
+      const stY = y + plateH + 5;
+      const stFs = mini ? 8 : 9;
+      if (stPulse) ctx.globalAlpha = 0.75 + 0.25 * Math.sin(FX.t * 7);
+      drawPixelText(ctx, stLabel, x + plateW / 2, stY, stFs, stColor, 'center', '#0c0a18');
+      ctx.globalAlpha = s.folded ? 0.55 : 1;
+    }
+  }
   // 行动时限条（人类：像素分段倒计时 / 机器人：扫描思考条）
+  // 位置：状态条之下（状态条无显示时空出来贴近名牌）
   if (isActor && !s.folded) {
-    const barX = x + 8, barY = y + plateH + 5, barW = plateW - 16;
+    const barX = x + 8, barY = y + plateH + 15, barW = plateW - 16;
     if (!s.isBot && hand && hand.deadline) {
       const total = Math.max(1, (snap.settings.actionTime || 30) * 1000);
       const remain = Math.max(0, hand.deadline - Date.now());
@@ -670,14 +746,18 @@ function drawSeat(ctx, s, pos, o) {
   if (!s.isBot && s.hud) {
     drawPixelText(ctx, 'V' + s.hud.vpip + '%' , x + plateW - 6, y + (mini ? 36 : 39), 9, '#7a92c2', 'right');
   }
-  // 机器人徽章（名牌右上角，不占名字空间）
+  // 机器人徽章（头像左上角外延，蓝底 "AI" 字，少遮挡头像）
   if (s.isBot) {
-    ctx.fillStyle = '#2c3a6e';
-    ctx.fillRect(x + plateW - 34, y - 6, 36, 13);
-    ctx.strokeStyle = '#5c8dff';
+    const bSize = Math.round(avSize * 0.45);
+    const bx = avX - 3, by = avY - 3;
+    ctx.fillStyle = '#5c8dff';
+    ctx.fillRect(bx, by, bSize, bSize);
+    ctx.strokeStyle = '#0c0a18';
     ctx.lineWidth = 1;
-    ctx.strokeRect(x + plateW - 34 + 0.5, y - 6 + 0.5, 35, 12);
-    drawPixelText(ctx, '机器人', x + plateW - 32, y - 5, 9, '#9db8ff');
+    ctx.strokeRect(bx + 0.5, by + 0.5, bSize - 1, bSize - 1);
+    // 字号按 bSize 自适应，居中
+    const fs = bSize >= 12 ? 9 : 8;
+    drawPixelText(ctx, 'AI', bx + bSize / 2, by + Math.round((bSize - fs) / 2), fs, '#ffffff', 'center', '#0c0a18');
   }
   // 本街已行动标识（绿色小勾徽章）
   if (s.inHand && !s.folded && s.acted && !isActor) {
@@ -704,7 +784,8 @@ function drawSeat(ctx, s, pos, o) {
     const dk = Math.max(0, Math.min(1, (FX.t - anim.handStartT - dIdx2 * 0.09) / 0.45));
     const de = 1 - Math.pow(1 - dk, 3);
     const deckX = 480, deckY = 180;
-    const c1cx = x + plateW / 2 - 2, c2cx = x + plateW / 2 + 2 + cw;
+    // 牌 1 / 牌 2 中心对称于名牌中心(总间距 cw,无额外偏移)
+    const c1cx = x + plateW / 2 - cw / 2, c2cx = x + plateW / 2 + cw / 2;
     const ccy = cardY + ch / 2;
     const c1x = deckX + (c1cx - deckX) * de, c1y = deckY + (ccy - deckY) * de;
     const c2x = deckX + (c2cx - deckX) * de, c2y = deckY + (ccy - deckY) * de;
@@ -729,9 +810,10 @@ function drawSeat(ctx, s, pos, o) {
     }
   }
 
-  // 庄家按钮
+  // 庄家按钮：顶部玩家用小系数避免与底池文字重叠，其他方向保持 0.24
   if (snap.button === s.seat) {
-    const dx = pos.x + (cx - pos.x) * 0.24, dy = pos.y + (cy - pos.y) * 0.24;
+    const r = pos.y < cy - 60 ? 0.08 : 0.24;
+    const dx = pos.x + (cx - pos.x) * r, dy = pos.y + (cy - pos.y) * r;
     ctx.fillStyle = '#f4efe3';
     ctx.beginPath(); ctx.arc(dx, dy, 10, 0, 7); ctx.fill();
     ctx.strokeStyle = '#1b1638'; ctx.lineWidth = 2; ctx.stroke();
@@ -740,71 +822,80 @@ function drawSeat(ctx, s, pos, o) {
 }
 
 function drawHero(ctx, s, snap, hand, isWinner, act, highlight) {
-  ctx.save(); // 防御：drawHero 内部修改 ctx.fillStyle/strokeStyle 但 drawCard 自己 restore；外层 save/restore 防万一
+  ctx.save();
   const th = getTheme();
-  const x = 56, y = H - 118;
-  // 头像（倒计时条在操作面板顶部，不再画头像环）
-  drawAvatar(ctx, x, y + 2, 44, snap.you.avatar || S_Avatar(snap), { border: isWinner ? '#ffd76e' : th.accent });
+  // 名牌紧贴牌桌下沿（cy=415, plateW=130），手牌整体在名牌右侧（cx=560）
+  // 头像名牌左外侧；筹码堆(HERO_BET y=350)牌桌内
+  const plateW = 130, plateH = 52;
+  const plateX = HERO_BASE.x - plateW / 2;  // 335
+  const plateY = HERO_BASE.y - plateH / 2;  // 389
+  const avSize = 44;
+  const avCx = plateX - 18 - avSize / 2;     // 260
+  const avCy = HERO_BASE.y;                  // 415
+  // 头像
+  drawAvatar(ctx, avCx - avSize / 2, avCy - avSize / 2, avSize, snap.you.avatar || S_Avatar(snap), { border: isWinner ? '#ffd76e' : th.accent });
 
   // 名牌
-  const px = x + 52;
   ctx.fillStyle = s.folded ? '#1d1936' : '#241f42';
-  ctx.fillRect(px, y, 150, 52);
+  ctx.fillRect(plateX, plateY, plateW, plateH);
   ctx.strokeStyle = '#3a3560';
   ctx.lineWidth = 2;
-  ctx.strokeRect(px + 1, y + 1, 148, 50);
-  drawPixelText(ctx, s.name.slice(0, 8), px + 8, y + 6, 13, '#66bb6a');
-  drawPixelText(ctx, fmt(s.chips), px + 8, y + 26, 16, '#ffd76e');
-  if (s.allIn && !s.folded) drawPixelText(ctx, 'ALL IN', px + 142, y + 26, 12, '#ef5350', 'right');
-  // 休息状态徽标
-  if (s.sittingOut) drawPixelText(ctx, '休息中', px + 142, y + 6, 11, '#9a92c2', 'right');
+  ctx.strokeRect(plateX + 1, plateY + 1, plateW - 2, plateH - 2);
+  drawPixelText(ctx, s.name.slice(0, 6), plateX + 8, plateY + 4, 13, '#66bb6a');
+  drawPixelText(ctx, fmt(s.chips), plateX + 8, plateY + 20, 14, '#ffd76e');
+  // 胜率/手牌名 挤进名牌下半部（y+36, 9px 字号居中）
+  const wr = S_winRate();
+  if (wr != null && snap.you.cards && !s.folded) {
+    const wrPct = Math.round(wr * 100);
+    const col = wrPct >= 60 ? '#66bb6a' : wrPct >= 40 ? '#ffd76e' : '#ef5350';
+    const label = `胜率 ${wrPct}%${renderState.handName ? ' · ' + renderState.handName : ''}`;
+    drawPixelText(ctx, label, plateX + plateW / 2, plateY + 36, 9, col, 'center', '#0c0a18');
+  }
+  if (s.allIn && !s.folded) drawPixelText(ctx, 'ALL IN', plateX + plateW - 8, plateY + 20, 12, '#ef5350', 'right');
+  if (s.sittingOut) drawPixelText(ctx, '休息中', plateX + plateW - 8, plateY + 4, 11, '#9a92c2', 'right');
   if (isWinner) {
     ctx.strokeStyle = '#ffd76e';
     ctx.lineWidth = 3;
-    ctx.strokeRect(px - 3, y - 3, 156, 58);
+    ctx.strokeRect(plateX - 3, plateY - 3, plateW + 6, plateH + 6);
   }
 
-  // 大手牌（发牌滑入 + 节奏翻面）
+  // 大手牌（发牌滑入 + 节奏翻面）— 高瘦比例 0.66，牌间距 40（重叠 22px）
   anim.holeAnimT = Math.min(1, anim.holeAnimT + 0.05);
   const cards = snap.you.cards;
-  const cxx = px + 162, cyy = y - 16;
+  const cyy = 421;  // chh=94 时牌顶 374（牌桌内 4px），牌底 468
+  const handCx = 560;
   if (cards && cards.length === 2) {
-    const cw = 62, chh = 88;
-    // 发牌飞入：从牌堆位置飞向手位（英雄第一个被发）
+    const cw = 62, chh = 94;  // 比例 62:94≈0.66，比标准 5:7(0.72)更高瘦
     const dk = Math.max(0, Math.min(1, (FX.t - anim.handStartT - 0.05) / 0.5));
     const de = 1 - Math.pow(1 - dk, 3);
     const deckX = 480, deckY = 180;
     const wob0 = Math.sin(FX.t * 2.4) * 0.015, wob1 = Math.sin(FX.t * 2.4 + 1) * 0.015;
-    const x0 = deckX + (cxx - deckX) * de, y0 = deckY + (cyy - deckY) * de;
-    const x1 = deckX + (cxx + cw * 0.74 - deckX) * de, y1 = deckY + (cyy + 7 - deckY) * de;
+    // 牌 0/1 中心间距 40（重叠 22px，标准德州客户端风）
+    const cx0 = handCx - 20, cx1 = handCx + 20;
+    const x0 = deckX + (cx0 - deckX) * de, y0 = deckY + (cyy - deckY) * de;
+    const x1 = deckX + (cx1 - deckX) * de, y1 = deckY + (cyy + 7 - deckY) * de;
     const f0 = Math.max(0, Math.min(1, (FX.t - anim.holeFlipStart) / 0.42));
     const f1 = Math.max(0, Math.min(1, (FX.t - anim.holeFlipStart - 0.16) / 0.42));
     const g0 = highlight && highlight.has(cards[0]) ? '#ffd76e' : null;
     const g1 = highlight && highlight.has(cards[1]) ? '#ffd76e' : null;
     const sc = 0.72 + 0.28 * de;
-    drawCard(ctx, x0, y0, cw, chh, cards[0], true, { rot: -0.5 + (0.07 + wob0) * de, scale: sc, flip: f0, glow: g0 });
-    drawCard(ctx, x1, y1, cw, chh, cards[1], true, { rot: 0.45 - (0.06 + wob1) * de, scale: sc, flip: f1, glow: g1 });
-  }
-  // 实时胜率 + 当前成牌名（决策时显示在牌上方）
-  if (S_winRate() != null && cards && !s.folded) {
-    const wr = Math.round(S_winRate() * 100);
-    const col = wr >= 60 ? '#66bb6a' : wr >= 40 ? '#ffd76e' : '#ef5350';
-    drawPixelText(ctx, `胜率 ${wr}%`, cxx + 24, cyy - 22, 15, col, 'center', '#0c0a18');
-    if (renderState.handName) {
-      drawPixelText(ctx, renderState.handName, cxx + 24, cyy - 42, 13, '#9ad0ff', 'center', '#0c0a18');
-    }
+    drawCard(ctx, x0 - cw / 2, y0 - chh / 2, cw, chh, cards[0], true, { rot: -0.5 + (0.07 + wob0) * de, scale: sc, flip: f0, glow: g0 });
+    drawCard(ctx, x1 - cw / 2, y1 - chh / 2, cw, chh, cards[1], true, { rot: 0.45 - (0.06 + wob1) * de, scale: sc, flip: f1, glow: g1 });
   }
 
-  // 自己的下注筹码（与座位下注位同一避让逻辑）
+  // 自己的下注筹码（HERO_BET 牌桌内）
   const shownBet = (anim.bets && anim.bets[snap.you.seat]) || 0;
   if (shownBet > 0) {
     const bs = betSpotFor(snap, s.seat);
     drawChipStack(ctx, bs.x, bs.y, shownBet);
   }
+  // 庄家按钮（名牌上沿上方 12 像素，中心对齐）
   if (snap.button === s.seat) {
+    const dx = plateX + plateW / 2, dy = plateY - 12;
     ctx.fillStyle = '#f4efe3';
-    ctx.beginPath(); ctx.arc(x + 164, y + 42, 10, 0, 7); ctx.fill();
-    drawPixelText(ctx, 'D', x + 164, y + 36, 12, '#1b1638', 'center');
+    ctx.beginPath(); ctx.arc(dx, dy, 10, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#1b1638'; ctx.lineWidth = 2; ctx.stroke();
+    drawPixelText(ctx, 'D', dx, dy - 6, 12, '#1b1638', 'center');
   }
   void act;
   ctx.restore();
@@ -843,6 +934,30 @@ function drawActionPanel(ctx, S, act) {
     anim.panelShown = false;
     if (me.inHand && !me.folded) {
       drawPixelText(ctx, '等待其他玩家行动…', 790, H - 40, 13, '#6a6484', 'center');
+      // 预操作快捷（未轮到自己时）：check_fold / call_any + 当前已预设状态
+      const pa = S.preAction || null;
+      const px2 = 640, py2 = H - 110;
+      // 面板底（与主面板同款，但只一行）
+      ctx.fillStyle = 'rgba(16, 12, 34, 0.78)';
+      ctx.fillRect(px2 - 12, py2 - 12, 320, 60);
+      ctx.strokeStyle = pa ? '#ffd76e' : '#3a3560';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(px2 - 12, py2 - 12, 320, 60);
+      drawPixelText(ctx, '预操作', px2, py2 - 4, 11, '#9ad0ff', 'left', '#0c0a18');
+      // 状态标签
+      const stateText = pa === 'check_fold' ? '已设:看牌/弃牌' : pa === 'call_any' ? '已设:跟到底' : '未预设';
+      drawPixelText(ctx, stateText, px2 + 308, py2 - 4, 11, pa ? '#ffd76e' : '#6a6484', 'right', '#0c0a18');
+      // 三个按钮
+      const cfActive = pa === 'check_fold', caActive = pa === 'call_any';
+      if (button(ctx, 'pre_cf', px2, py2 + 8, 96, 32, '看牌/弃牌', {
+        size: 12, fill: cfActive ? '#5c4a1a' : '#1f1b38', border: cfActive ? '#ffd76e' : '#3a3560', color: cfActive ? '#fff3c4' : '#cfe1ff',
+      })) act.setPreAction(cfActive ? 'clear' : 'check_fold');
+      if (button(ctx, 'pre_ca', px2 + 100, py2 + 8, 96, 32, '跟到底', {
+        size: 12, fill: caActive ? '#5c4a1a' : '#1f1b38', border: caActive ? '#ffd76e' : '#3a3560', color: caActive ? '#fff3c4' : '#cfe1ff',
+      })) act.setPreAction(caActive ? 'clear' : 'call_any');
+      if (pa && button(ctx, 'pre_clear', px2 + 200, py2 + 8, 96, 32, '清除', {
+        size: 12, fill: '#2b1a2e', border: '#5c8dff', color: '#cfe1ff',
+      })) act.setPreAction('clear');
     }
     return;
   }

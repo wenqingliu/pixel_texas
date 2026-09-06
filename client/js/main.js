@@ -29,6 +29,7 @@ const S = {
   connected: false,
   joinOpen: false,
   panel: null,          // 'stats' | 'history' | 'replay' | 'profile'
+  preAction: null,      // 预操作：'check_fold' | 'call_any' | null（本地，不上行）
   history: [],          // 手牌流水
   stats: [],            // 房间战绩 [name, {hands,wins,net}]
   replay: null,         // {rec, steps, i, auto, lastAdvance}
@@ -175,6 +176,15 @@ function onMsg(m) {
     case 'prompt':
       S.prompt = m;
       sfx.turn();
+      // 预操作：收到自己 prompt 立即按本地预设发起 action（不等用户点）
+      if (S.preAction) {
+        const pre = S.preAction;
+        S.preAction = null; // 用完即清
+        const o = m.options || {};
+        let type = pre === 'check_fold' ? (o.canCheck ? 'check' : 'fold') : 'call';
+        // 给渲染一拍更新(显示新状态:已设的预设消失),再发 action
+        setTimeout(() => net.send({ t: 'action', type }), 30);
+      }
       break;
     case 'history':
       S.history = m.hands || [];
@@ -224,6 +234,7 @@ function handleEv(ev) {
     case 'hand_start':
       S.prompt = null;
       S.myCards = null;
+      S.preAction = null; // 新手牌清空上一手可能遗留的预操作
       lastHandNo = ev.handNo;
       seqPush(() => { resetHandAnim(); clearBets(); notifyDeal(); sfx.deal(); }, 0);
       break;
@@ -417,6 +428,10 @@ const act = {
     S.prompt = null;
   },
   rebuy: () => net.send({ t: 'rebuy' }),
+  // 预操作：本地状态。点按钮 → S.preAction；收到 prompt 时按它自动 action；用完即清。
+  setPreAction: (action) => {
+    S.preAction = (action === 'clear' || !action) ? null : action;
+  },
   takeSeat: () => net.send({ t: 'take_seat' }),
   setVolume: (v) => { S.volume = v; setVolume(v); },
   setMusicVolume: (v) => { S.musicVol = v; Music.setVolume(v); },
