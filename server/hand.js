@@ -39,6 +39,7 @@ export class Hand {
       p.allIn = false;
       p.acted = false;
       p.revealed = false;
+      p.lastAction = null;
       p._awaiting = false;
       // 统计采集（VPIP / PFR / 激进度）
       p.vpip = false;       // 翻牌前主动投钱
@@ -201,6 +202,7 @@ export class Hand {
     }
 
     p.acted = true;
+    p.lastAction = { type, amount: ev.amount || 0, allIn: !!ev.allIn };
     this.actor = null;
     this.emit(ev);
 
@@ -414,6 +416,7 @@ export class Hand {
     if (this.actor && this.actor.seat === seat) return { ok: false, err: 'is_your_turn' };
     p.folded = true;
     p.acted = true;
+    p.lastAction = { type: 'fold', amount: 0, allIn: false };
     p._awaiting = false;
     this.emit({ kind: 'action', seat, type: 'fold', put: 0 });
     const alive = this.alive();

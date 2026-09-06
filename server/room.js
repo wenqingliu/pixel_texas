@@ -19,7 +19,9 @@ const BOT_THINK = [800, 2600];    // 机器人思考延迟
 const HAND_BREAK = 4200;          // 一手结束到下一手的间隔
 const RUNOUT_STEP = 1300;         // 全下跑牌每条街间隔
 const ROOM_IDLE_CLOSE = 45000;    // 无人房间关闭时间
-export const TIMING = { ACTION_TIME, BOT_THINK, HAND_BREAK, RUNOUT_STEP, ROOM_IDLE_CLOSE };
+// 真人行动节奏：等下注筹码飞行播完(客户端 flyChips dur 0.42~0.6s + seqPush 起飞延迟 ~640ms ≈ 1.24s)+ 0.2s 最小停顿
+const ACTION_PACING = 1400;
+export const TIMING = { ACTION_TIME, BOT_THINK, HAND_BREAK, RUNOUT_STEP, ROOM_IDLE_CLOSE, ACTION_PACING };
 
 export class Room {
   constructor(lobby, code, hostToken) {
@@ -319,11 +321,15 @@ export class Room {
         const delay = t0 + Math.random() * (t1 - t0);
         this.addTimer(() => this._botAct(p), delay);
       } else {
-        // 设置的行动时限（秒）× TIMING 缩放（测试提速用）
+        // 真人：先等"行动节奏"(等下注筹码飞行动画播完 + 0.2s 最小停顿)，
+        // 再开 prompt 与倒计时窗口。期间 _armHumanTimeout 不会被触发，actorDeadline = 0(广播显示无人倒计时)
         const at = Math.max(5, this.settings.actionTime || 30) * 1000 * (TIMING.ACTION_TIME / 30000);
-        this.actorDeadline = Date.now() + at;
-        this.lobby.sendTo(p.token, { t: 'prompt', options: this.hand.options(p), deadline: this.actorDeadline });
-        this._armHumanTimeout(p.seat, this.actorDeadline, at);
+        this.addTimer(() => {
+          if (this.closed || !this.hand || this.hand.phase !== 'betting' || this.hand.awaitingSeat() !== p.seat) return;
+          this.actorDeadline = Date.now() + at;
+          this.lobby.sendTo(p.token, { t: 'prompt', options: this.hand.options(p), deadline: this.actorDeadline });
+          this._armHumanTimeout(p.seat, this.actorDeadline, at);
+        }, TIMING.ACTION_PACING * (TIMING.ACTION_TIME / 30000));
       }
     } else if (ev.kind === 'action') {
       this.actorDeadline = 0; // 行动已完成，关闭当前行动窗口（旧超时计时器随之失效）
@@ -580,6 +586,7 @@ export class Room {
         out.totalBet = part.commitTotal;
         out.lastDelta = part.lastDelta || 0;
         out.acted = !!part.acted; // 本街已行动标识
+        out.lastAction = part.lastAction || null; // 最近一次动作 {type, amount, allIn}
         if (part.revealed) out.cards = part.cards;
       } else {
         out.inHand = false; out.bet = 0; out.folded = false; out.allIn = false; out.acted = false;
