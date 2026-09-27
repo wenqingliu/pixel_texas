@@ -11,9 +11,9 @@ function panelFrame(ctx, title, w, h) {
   const x = W / 2 - w / 2, y = H / 2 - h / 2;
   ctx.fillStyle = 'rgba(10, 8, 22, 0.92)';
   ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#181334';
+  ctx.fillStyle = th.panel;
   ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = '#3a3560';
+  ctx.strokeStyle = th.panelBorder;
   ctx.lineWidth = 2;
   ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
   ctx.strokeStyle = th.accent;
@@ -82,7 +82,7 @@ function drawProfilePanel(ctx, S, act) {
   const sx = f.x + 424;
   drawPixelText(ctx, '生涯统计', sx, f.y + 44, 15, '#ffd76e');
   if (!st || st.hands === 0) {
-    drawPixelText(ctx, '还没有对局记录', sx, f.y + 70, 13, '#6a6484');
+    drawPixelText(ctx, '还没有对局记录', sx, f.y + 70, 13, '#8b85ad');
   } else {
     const rows = [
       ['局数', String(st.hands)],
@@ -112,7 +112,7 @@ function drawProfilePanel(ctx, S, act) {
       drawPixelText(ctx, st.style.desc, sx + 10, sy + 19, 10, '#9a92c2');
     }
   }
-  drawPixelText(ctx, '统计跨房间累计 · 每 20 局解锁风格分析', f.x + 130, f.y + f.h - 26, 11, '#6a6484');
+  drawPixelText(ctx, '统计跨房间累计 · 每 20 局解锁风格分析', f.x + 130, f.y + f.h - 26, 11, '#8b85ad');
 }
 
 function inRectHover(x, y, w, h) {
@@ -123,7 +123,7 @@ function drawStatsPanel(ctx, S, act) {
   const f = panelFrame(ctx, '战绩（本房间）', 560, 380);
   if (!f) { act.closePanel(); return; }
   const rows = [...(S.stats || [])].sort((a, b) => b[1].net - a[1].net);
-  if (!rows.length) drawPixelText(ctx, '还没有完成的手牌', W / 2, H / 2, 14, '#6a6484', 'center');
+  if (!rows.length) drawPixelText(ctx, '还没有完成的手牌', W / 2, H / 2, 14, '#8b85ad', 'center');
   drawPixelText(ctx, '玩家', f.x + 40, f.y + 52, 13, '#9a92c2');
   drawPixelText(ctx, '局数', f.x + 240, f.y + 52, 13, '#9a92c2');
   drawPixelText(ctx, '胜场', f.x + 320, f.y + 52, 13, '#9a92c2');
@@ -142,7 +142,7 @@ function drawHistoryPanel(ctx, S, act) {
   const f = panelFrame(ctx, '牌局回放（最近 30 手）', 560, 380);
   if (!f) { act.closePanel(); return; }
   const hands = S.history || [];
-  if (!hands.length) drawPixelText(ctx, '还没有完成的手牌', W / 2, H / 2, 14, '#6a6484', 'center');
+  if (!hands.length) drawPixelText(ctx, '还没有完成的手牌', W / 2, H / 2, 14, '#8b85ad', 'center');
   hands.slice().reverse().forEach((h, i) => {
     const y = f.y + 48 + i * 30;
     if (y > f.y + f.h - 44) return;
@@ -151,7 +151,7 @@ function drawHistoryPanel(ctx, S, act) {
     const label = `#${h.handNo} · ${h.sb}/${h.bb} · 底池${fmt((h.pots || []).reduce((s, x) => s + x.amount, 0))} · ${wname} 赢`;
     if (button(ctx, 'replay' + h.handNo, f.x + 24, y, f.w - 48, 26, label, { size: 13, fill: '#241f42' })) act.openReplay(h);
   });
-  if (hands.length) drawPixelText(ctx, '点击一手牌开始回放', W / 2, f.y + f.h - 26, 12, '#6a6484', 'center');
+  if (hands.length) drawPixelText(ctx, '点击一手牌开始回放', W / 2, f.y + f.h - 26, 12, '#8b85ad', 'center');
 }
 
 function actionLabel(a) {
@@ -165,12 +165,13 @@ function drawReplayPanel(ctx, S, act) {
   const rp = S.replay;
   const rec = rp.rec;
   const steps = rp.steps;
+  const th = getTheme();
   const cur = steps[Math.min(rp.i, steps.length - 1)];
   // 面板
   ctx.fillStyle = 'rgba(10, 8, 22, 0.95)';
   ctx.fillRect(0, 0, W, H);
   const f = { x: 30, y: 40, w: W - 60, h: H - 80 };
-  ctx.fillStyle = '#181334';
+  ctx.fillStyle = th.panel;
   ctx.fillRect(f.x, f.y, f.w, f.h);
   ctx.strokeStyle = '#ff9f43';
   ctx.lineWidth = 2;

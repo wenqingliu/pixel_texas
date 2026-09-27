@@ -15,6 +15,16 @@ function menuK(S, delay) {
   return k * k * (3 - 2 * k);
 }
 
+// 半透明面板卡片（设置区 / 列表容器用）
+function panelRect(ctx, x, y, w, h) {
+  const th = getTheme();
+  ctx.fillStyle = 'rgba(12, 9, 26, 0.82)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = th.panelBorder;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+}
+
 // ── 主菜单 ──────────────────────────────────────────
 function titleWobble(t) { return Math.sin(t * 2.2) * 3; }
 
@@ -70,52 +80,53 @@ export function drawMenu(ctx, S, act) {
     S.dom.name.x = 316; S.dom.name.y = 186; S.dom.name.w = 190; S.dom.name.h = 40;
   }
 
-  // 右上：主题 + 音量 + 音乐
-  drawPixelText(ctx, '主题', 810, 0, 13, '#9a92c2');
-  const ti = cycle(ctx, 'theme', 810, 14, 130, '', THEMES.map(t => t.name), themeIndex());
+  // 右上：设置卡片（主题 / 音效 / 音乐 / 曲目），不再贴着屏幕顶边
+  panelRect(ctx, 778, 12, 168, 174);
+  drawPixelText(ctx, '主题', 790, 20, 11, th.textDim);
+  const ti = cycle(ctx, 'theme', 790, 32, 146, '', THEMES.map(t => t.name), themeIndex());
   if (THEMES[ti] && THEMES[ti].id !== th.id) act.setTheme(THEMES[ti].id);
-  drawPixelText(ctx, '音效', 810, 48, 13, '#9a92c2');
-  const v = slider(ctx, 'vol', 810, 64, 130, S.volume, 0, 1);
+  drawPixelText(ctx, '音效', 790, 62, 11, th.textDim);
+  const v = slider(ctx, 'vol', 790, 74, 146, S.volume, 0, 1);
   if (v !== S.volume) act.setVolume(v);
-  drawPixelText(ctx, '音乐', 810, 88, 13, '#9a92c2');
-  const mv = slider(ctx, 'mvol', 810, 104, 130, S.musicVol, 0, 1);
+  drawPixelText(ctx, '音乐', 790, 104, 11, th.textDim);
+  const mv = slider(ctx, 'mvol', 790, 116, 146, S.musicVol, 0, 1);
   if (mv !== S.musicVol) act.setMusicVolume(mv);
-  drawPixelText(ctx, '曲目', 810, 128, 13, '#9a92c2');
+  drawPixelText(ctx, '曲目', 790, 146, 11, th.textDim);
   const trackIds = ['auto', 'neon', 'table', 'tense', 'off'];
   const trackNames = ['自动', '霓虹夜晚', '绿桌风云', '暗流涌动', '关'];
-  const tci = cycle(ctx, 'track', 810, 142, 130, '', trackNames, Math.max(0, trackIds.indexOf(S.track)));
+  const tci = cycle(ctx, 'track', 790, 158, 146, '', trackNames, Math.max(0, trackIds.indexOf(S.track)));
   if (trackIds[tci] !== S.track) act.setTrack(trackIds[tci]);
 
-  // 房间列表
+  // 房间列表：条目两行（行1 房间码 + 模式；行2 人数/座位/状态/盲注）
   drawPixelText(ctx, '▸ 房间列表', 640, 170, 16, '#f4efe3');
-  if (!S.rooms.length) drawPixelText(ctx, '暂无公开房间，创建一个吧', 640, 196, 13, '#6a6484');
+  if (!S.rooms.length) drawPixelText(ctx, '暂无公开房间，创建一个吧', 640, 196, 13, '#8b85ad');
   const listK = menuK(S, 0.3);
   ctx.save();
   ctx.globalAlpha = listK;
   ctx.translate((1 - listK) * 40, 0);
-  S.rooms.slice(0, 7).forEach((r, i) => {
-    const y = 196 + i * 36;
-    const tag = r.mode === 'tournament' ? '[锦标赛] ' : '';
-    const label = `${tag}${r.code} · ${r.humans}人${r.playing ? ' · 对局中' : ''} · ${r.sb}/${r.bb}`;
-    if (button(ctx, 'room' + r.code, 640, y, 300, 30, label, {
-      size: 13, fill: '#241f42',
-      border: r.mode === 'tournament' ? '#c07bee' : undefined,
-    })) act.joinCode(r.code);
+  S.rooms.slice(0, 5).forEach((r, i) => {
+    const y = 196 + i * 46;
+    const tour = r.mode === 'tournament';
+    if (button(ctx, 'room' + r.code, 640, y, 300, 40, '', { fill: '#241f42', border: tour ? '#c07bee' : undefined })) act.joinCode(r.code);
+    drawPixelText(ctx, r.code, 652, y + 6, 14, '#ffd76e');
+    drawPixelText(ctx, tour ? '锦标赛' : '现金桌', 932, y + 7, 11, tour ? '#c07bee' : '#8b85ad', 'right');
+    drawPixelText(ctx, `${r.humans}人 · ${r.seated}/${r.maxSeats}座${r.playing ? ' · 对局中' : ''} · ${r.sb}/${r.bb}`, 652, y + 23, 10, '#8b85ad');
   });
 
   ctx.restore();
-  drawPixelText(ctx, '和朋友局域网联机：把页面顶部地址发给对方即可', W / 2, 522, 12, '#6a6484', 'center');
+  drawPixelText(ctx, '和朋友局域网联机：把页面顶部地址发给对方即可', W / 2, 522, 12, '#8b85ad', 'center');
 }
 
 // ── 房间等待界面 ────────────────────────────────────
 export function drawRoomLobby(ctx, S, act) {
   drawBackdrop(ctx);
+  const th = getTheme();
   const snap = S.snap;
   const st = snap.settings;
 
   // 顶栏
   if (button(ctx, 'leave', 16, 16, 96, 34, '← 退出房间', { size: 13 })) act.leave();
-  drawPixelText(ctx, `房间码  ${snap.code}`, W / 2, 22, 26, '#ffd76e', 'center', '#0c0a18');
+  drawPixelText(ctx, `房间码  ${snap.code}`, W / 2, 22, 26, th.gold, 'center', '#0c0a18');
   if (textButton(ctx, 'copy', W / 2 + 110, 30, 13, '[复制]')) { act.copyCode(snap.code); }
   drawPixelText(ctx, `盲注 ${st.sb}/${st.bb} · 买入 ${fmt(st.buyIn)}`, W / 2, 56, 13, '#9a92c2', 'center');
 
@@ -130,19 +141,19 @@ export function drawRoomLobby(ctx, S, act) {
     const filled = !s.empty;
     const ctx2 = ctx;
     ctx2.save();
-    ctx2.fillStyle = filled ? '#241f42' : '#1a1636';
+    ctx2.fillStyle = filled ? th.panel : th.panelDim;
     ctx2.fillRect(cx, cy, cellW, cellH);
-    ctx2.strokeStyle = filled ? '#3a3560' : '#2a2548';
+    ctx2.strokeStyle = filled ? th.panelBorder : th.panelDim;
     ctx2.lineWidth = 2;
     ctx2.strokeRect(cx + 1, cy + 1, cellW - 2, cellH - 2);
       if (filled) {
-        drawAvatar(ctx2, cx + 8, cy + 14, 36, s.avatar || '', { border: snap.you.seat === s.seat ? '#66bb6a' : '#3a3560' });
-        drawPixelText(ctx2, s.name.slice(0, 8), cx + 52, cy + 8, 14, '#f4efe3');
-        drawPixelText(ctx2, fmt(s.chips), cx + 52, cy + 34, 14, '#ffd76e');
-      if (s.isBot) drawPixelText(ctx2, `机器人·${LEVEL_NAMES[s.level] || ''}`, cx + cellW - 10, cy + 10, 12, '#5c8dff', 'right');
-      else if (snap.you.seat === s.seat) drawPixelText(ctx2, '（你）', cx + cellW - 10, cy + 10, 12, '#66bb6a', 'right');
-      if (!s.connected) drawPixelText(ctx2, '断线', cx + cellW - 10, cy + 34, 12, '#ef5350', 'right');
-      else if (s.sittingOut) drawPixelText(ctx2, '休战', cx + cellW - 10, cy + 34, 12, '#ef5350', 'right');
+        drawAvatar(ctx2, cx + 8, cy + 14, 36, s.avatar || '', { border: snap.you.seat === s.seat ? th.ok : th.panelBorder });
+        drawPixelText(ctx2, s.name.slice(0, 8), cx + 52, cy + 8, 14, th.text);
+        drawPixelText(ctx2, fmt(s.chips), cx + 52, cy + 34, 14, th.gold);
+      if (s.isBot) drawPixelText(ctx2, `机器人·${LEVEL_NAMES[s.level] || ''}`, cx + cellW - 10, cy + 10, 12, th.info, 'right');
+      else if (snap.you.seat === s.seat) drawPixelText(ctx2, '（你）', cx + cellW - 10, cy + 10, 12, th.ok, 'right');
+      if (!s.connected) drawPixelText(ctx2, '断线', cx + cellW - 10, cy + 34, 12, th.danger, 'right');
+      else if (s.sittingOut) drawPixelText(ctx2, '休战', cx + cellW - 10, cy + 34, 12, th.danger, 'right');
     } else {
       drawPixelText(ctx2, `空位 ${i + 1}`, cx + cellW / 2, cy + 22, 13, '#4a4470', 'center');
     }
@@ -179,12 +190,12 @@ export function drawRoomLobby(ctx, S, act) {
     const ati = cycle(ctx, 'actionTime', px, py + 152, 260, '行动时限', ['15秒', '30秒', '60秒'], Math.max(0, atIdx));
     if (ati !== atIdx && ati >= 0) act.updateSettings({ actionTime: [15, 30, 60][ati] });
   } else {
-    drawPixelText(ctx, '等待房主开始对局…', px, py + 10, 16, '#9a92c2');
+    drawPixelText(ctx, '等待房主开始对局…', px, py + 10, 16, th.textDim);
   }
 
   // 开始按钮
   if (snap.isHost) {
     if (button(ctx, 'start', W - 216, H - 76, 200, 56, '开始对局', { fill: '#7a3b12', border: '#ff9f43', color: '#ffe3b3', size: 22 })) act.start();
   }
-  drawPixelText(ctx, '机器人会在开局时自动坐进空位；真人加入将顶替机器人', W / 2, H - 30, 12, '#6a6484', 'center');
+  drawPixelText(ctx, '机器人会在开局时自动坐进空位；真人加入将顶替机器人', W / 2, H - 30, 12, '#8b85ad', 'center');
 }
