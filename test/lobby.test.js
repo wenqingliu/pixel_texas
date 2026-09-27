@@ -105,6 +105,19 @@ function assert(cond, msg) {
   assert(r.ok && room.hand && room.breakDeadline === 0, '全员就绪提前开局');
   room.close();
   assert(room.closed, '房间关闭清理计时器');
+
+  // 房主可关闭休息：breakWait=0 直接开局
+  const room2 = new Room(fakeLobby, 'TST3', 'host');
+  room2.addPlayer('host', '房主', '');
+  room2.settings.botsFill = true;
+  room2.phase = 'playing';
+  room2.trySit('host');
+  room2.fillBots();
+  const su = room2.updateSettings('host', { breakWait: 0 });
+  assert(su.ok && room2.settings.breakWait === 0, '休息时长设置生效');
+  room2.startBreak();
+  assert(room2.hand && room2.breakDeadline === 0, 'breakWait=0 关闭休息直接开局');
+  room2.close();
 }
 
 // ── storage：原子写 + .bak 回退 ──────────────────────

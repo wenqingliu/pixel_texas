@@ -1,6 +1,6 @@
 // 服务器全链路自测：假 ws 客户端驱动 Lobby/Room + 真实机器人打完整手牌
 import { Lobby } from '../server/lobby.js';
-import { TIMING } from '../server/room.js';
+import { TIMING, DEFAULT_SETTINGS } from '../server/room.js';
 import { botDecide, equity } from '../server/bots/bot.js';
 import { newDeck, shuffle, eval7 } from '../server/evaluator.js';
 
@@ -23,9 +23,9 @@ const until = async (fn, timeoutMs = 6000) => {
 TIMING.ACTION_TIME = 400;
 TIMING.BOT_THINK = [10, 50];
 TIMING.HAND_BREAK = 150;
-TIMING.HAND_BREAK_WAIT = 100;
 TIMING.RUNOUT_STEP = 40;
 TIMING.ROOM_IDLE_CLOSE = 100000;
+DEFAULT_SETTINGS.breakWait = 0; // 跳过局间休息倒计时（由 lobby.test 单测覆盖）
 
 class FakeWS {
   constructor() { this.readyState = 1; this.inbox = []; }

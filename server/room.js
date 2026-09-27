@@ -3,7 +3,7 @@ import { Hand } from './hand.js';
 import { scoreName, eval7 } from './evaluator.js';
 import { botDecide, BOT_NAMES, LEVEL_NAMES } from './bots/bot.js';
 
-export const DEFAULT_SETTINGS = { maxSeats: 6, sb: 10, bb: 20, buyIn: 2000, botsFill: true, botLevel: 'normal', mode: 'cash', blindsEvery: 8, actionTime: 30 };
+export const DEFAULT_SETTINGS = { maxSeats: 6, sb: 10, bb: 20, buyIn: 2000, botsFill: true, botLevel: 'normal', mode: 'cash', blindsEvery: 8, actionTime: 30, breakWait: 8 };
 export const BUYIN_OPTIONS = [1000, 2000, 5000, 10000];
 export const BLIND_OPTIONS = [
   { sb: 5, bb: 10 }, { sb: 10, bb: 20 }, { sb: 25, bb: 50 }, { sb: 50, bb: 100 },
@@ -17,14 +17,13 @@ export const BLIND_LEVELS = [
 const ACTION_TIME = 30000;        // 人类行动超时
 const BOT_THINK = [800, 2600];    // 机器人思考延迟
 const HAND_BREAK = 4200;          // 一手结束到下一手的间隔（结算动画播完）
-const HAND_BREAK_WAIT = 8000;     // 两局之间休息倒计时（有真人参战时，可点「继续」提前）
 const RUNOUT_STEP = 1300;         // 全下跑牌每条街间隔
 const ROOM_IDLE_CLOSE = 45000;    // 无人房间关闭时间
 // 真人行动节奏：等下注筹码飞行播完(客户端 flyChips dur 0.42~0.6s + seqPush 起飞延迟 ~640ms ≈ 1.24s)+ 0.2s 最小停顿
 const ACTION_PACING = 1400;
 // 手牌事件的快照合并窗口：窗口内多次状态变化合并为一次全量快照广播
 const SNAPSHOT_MERGE_MS = 150;
-export const TIMING = { ACTION_TIME, BOT_THINK, HAND_BREAK, HAND_BREAK_WAIT, RUNOUT_STEP, ROOM_IDLE_CLOSE, ACTION_PACING };
+export const TIMING = { ACTION_TIME, BOT_THINK, HAND_BREAK, RUNOUT_STEP, ROOM_IDLE_CLOSE, ACTION_PACING };
 // 只服务端内部消费、客户端不处理的事件：不发广播
 const CLIENT_EV_SKIP = new Set(['hole', 'action_required', 'hand_stats', 'runout', 'hand_break']);
 
@@ -50,6 +49,7 @@ export class Room {
     this._lastSyncAt = 0;
     this.breakDeadline = 0;     // 两局之间休息倒计时截止（0 = 不在休息期）
     this.breakReady = new Set(); // 已点「继续」的参战真人 token
+    this.breakTotal = 0;        // 本次休息时长（快照回传给客户端进度条）
     this.runoutFast = false;    // 全下跑牌加速（任意玩家可触发）
 
     // 锦标赛 / 回放 / 战绩状态
@@ -472,15 +472,17 @@ export class Room {
   // 「退出」就是普通离房。纯机器人桌保持原节奏直接开。
   startBreak() {
     if (this.closed || this.phase !== 'playing') return;
+    const waitMs = Math.max(0, this.settings.breakWait | 0) * 1000; // 房主可调，0 = 关闭休息
     const need = this._breakNeed();
-    if (need === 0) { this.startHand(); return; }
+    if (!waitMs || need === 0) { this.startHand(); return; }
     this.breakReady = new Set();
-    this.breakDeadline = Date.now() + TIMING.HAND_BREAK_WAIT;
+    this.breakDeadline = Date.now() + waitMs;
+    this.breakTotal = waitMs;
     this.addTimer(() => {
       if (!this.breakDeadline) return; // 已被全员就绪提前开局
       this.breakDeadline = 0;
       this.startHand();
-    }, TIMING.HAND_BREAK_WAIT);
+    }, waitMs);
   }
 
   // 参战下一局的真人（有座、有码、未休息、未出局、在线）
@@ -626,7 +628,7 @@ export class Room {
   updateSettings(token, patch) {
     if (token !== this.hostToken) return { ok: false, err: 'not_host' };
     const prevMode = this.settings.mode;
-    const allowed = ['maxSeats', 'sb', 'bb', 'buyIn', 'botsFill', 'botLevel', 'mode', 'blindsEvery', 'actionTime'];
+    const allowed = ['maxSeats', 'sb', 'bb', 'buyIn', 'botsFill', 'botLevel', 'mode', 'blindsEvery', 'actionTime', 'breakWait'];
     for (const k of allowed) {
       if (k in patch) this.settings[k] = patch[k];
     }
@@ -636,6 +638,7 @@ export class Room {
     this.settings.maxSeats = Math.max(2, Math.min(9, this.settings.maxSeats | 0));
     this.settings.blindsEvery = Math.max(2, Math.min(20, this.settings.blindsEvery | 0 || 8));
     this.settings.actionTime = Math.max(10, Math.min(90, this.settings.actionTime | 0 || 30));
+    this.settings.breakWait = Math.max(0, Math.min(30, this.settings.breakWait | 0)); // 局间休息秒数，0 = 关
     if (!LEVEL_NAMES[this.settings.botLevel]) this.settings.botLevel = 'normal';
     // 盲注/买入：必须是有限数值，非法值回落默认（NaN 会污染整手牌的筹码守恒）
     const intOr = (v, dflt) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? n : dflt; };
@@ -709,7 +712,7 @@ export class Room {
       tournamentOver: this.tournamentOver,
       break: this.breakDeadline ? {
         deadline: this.breakDeadline,
-        total: TIMING.HAND_BREAK_WAIT,
+        total: this.breakTotal || 8000,
         ready: this.breakReady.size,
         need: this._breakNeed(),
       } : null,

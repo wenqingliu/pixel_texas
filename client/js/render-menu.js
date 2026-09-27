@@ -189,6 +189,11 @@ export function drawRoomLobby(ctx, S, act) {
     const atIdx = [15, 30, 60].indexOf(st.actionTime || 30);
     const ati = cycle(ctx, 'actionTime', px, py + 152, 260, '行动时限', ['15秒', '30秒', '60秒'], Math.max(0, atIdx));
     if (ati !== atIdx && ati >= 0) act.updateSettings({ actionTime: [15, 30, 60][ati] });
+    // 局间休息
+    const bwVals = [0, 5, 8, 12, 20];
+    const bwIdx = bwVals.indexOf(st.breakWait | 0);
+    const bwi = cycle(ctx, 'breakWait', px + 290, py + 152, 220, '局间休息', ['关', '5秒', '8秒', '12秒', '20秒'], Math.max(0, bwIdx));
+    if (bwi !== bwIdx && bwi >= 0) act.updateSettings({ breakWait: bwVals[bwi] });
   } else {
     drawPixelText(ctx, '等待房主开始对局…', px, py + 10, 16, th.textDim);
   }
