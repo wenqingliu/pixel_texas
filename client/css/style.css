@@ -83,3 +83,33 @@ html, body {
   z-index: 10;
 }
 #dom-input:focus { border-color: #ff9f43; }
+
+/* 触控设备：禁掉双击缩放/长按选中/滚动，指针事件全交给 canvas */
+html, body {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#game { touch-action: none; }
+
+/* 竖屏 + 触屏：画面会缩得太小，提示横屏（桌面窄窗口不受影响） */
+#portrait-tip {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: #0c0a18;
+  color: #f4efe3;
+  text-align: center;
+}
+#portrait-tip .pt-icon { font-size: 44px; }
+#portrait-tip .pt-text { font-size: 22px; letter-spacing: 4px; color: #ffd76e; }
+#portrait-tip .pt-sub { font-size: 13px; color: #8b85ad; }
+@media (orientation: portrait) and (pointer: coarse) {
+  #portrait-tip { display: flex; }
+}
