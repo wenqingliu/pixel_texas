@@ -107,5 +107,19 @@ function assert(cond, msg) {
   assert(room.closed, '房间关闭清理计时器');
 }
 
+// ── storage：原子写 + .bak 回退 ──────────────────────
+{
+  const { saveNow, load } = await import('../server/storage.js');
+  const fsvc = await import('node:fs');
+  const file = path.join(process.env.PT_DATA_DIR, 'probe.json');
+  saveNow('probe', { v: 1 });
+  assert(load('probe', null) && load('probe', null).v === 1, '原子写后可读回');
+  fsvc.renameSync(file, file + '.bak');
+  fsvc.writeFileSync(file, '{broken');
+  assert(load('probe', null) && load('probe', null).v === 1, '主文件损坏回退 .bak');
+  fsvc.writeFileSync(file + '.bak', '{also-broken');
+  assert(load('probe', 'def') === 'def', '两份全损坏返回默认值');
+}
+
 console.log(fails === 0 ? 'lobby 校验全部通过 ✓' : `lobby 校验有 ${fails} 项失败 ✗`);
 process.exit(fails === 0 ? 0 : 1);
