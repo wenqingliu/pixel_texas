@@ -71,7 +71,18 @@ wss.on('connection', (ws) => {
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
 
+  // 每连接消息限流：令牌桶（容量 40，每秒回填 20），超频直接断开，防失控客户端刷房间/行动
+  const rate = { tokens: 40, at: Date.now() };
   ws.on('message', (data) => {
+    const now = Date.now();
+    rate.tokens = Math.min(40, rate.tokens + (now - rate.at) / 1000 * 20);
+    rate.at = now;
+    if (rate.tokens < 1) {
+      console.warn('[rate] 断开超频连接');
+      ws.terminate();
+      return;
+    }
+    rate.tokens -= 1;
     let msg;
     try { msg = JSON.parse(data.toString()); } catch { return; }
     const token = ws._token;
