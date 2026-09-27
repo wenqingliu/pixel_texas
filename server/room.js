@@ -21,7 +21,11 @@ const RUNOUT_STEP = 1300;         // 全下跑牌每条街间隔
 const ROOM_IDLE_CLOSE = 45000;    // 无人房间关闭时间
 // 真人行动节奏：等下注筹码飞行播完(客户端 flyChips dur 0.42~0.6s + seqPush 起飞延迟 ~640ms ≈ 1.24s)+ 0.2s 最小停顿
 const ACTION_PACING = 1400;
+// 手牌事件的快照合并窗口：窗口内多次状态变化合并为一次全量快照广播
+const SNAPSHOT_MERGE_MS = 150;
 export const TIMING = { ACTION_TIME, BOT_THINK, HAND_BREAK, RUNOUT_STEP, ROOM_IDLE_CLOSE, ACTION_PACING };
+// 只服务端内部消费、客户端不处理的事件：不发广播
+const CLIENT_EV_SKIP = new Set(['hole', 'action_required', 'hand_stats', 'runout']);
 
 export class Room {
   constructor(lobby, code, hostToken) {
@@ -41,6 +45,8 @@ export class Room {
     this.pendingSit = [];       // 等待顶替机器人座位的 token
     this.closed = false;
     this._idleTimer = null;     // 空房间闲置关闭计时器
+    this._syncPending = false;  // 快照合并：是否有排定的延迟广播
+    this._lastSyncAt = 0;
 
     // 锦标赛 / 回放 / 战绩状态
     this.handLog = [];          // 最近手牌流水（回放用）
@@ -59,6 +65,20 @@ export class Room {
     return t;
   }
   clearTimers() { for (const t of this.timers) clearTimeout(t); this.timers.clear(); }
+
+  // 手牌事件用的快照广播：同步事件串（发牌/摊牌连发）合并为一次全量广播，
+  // 间隔大于窗口的常态事件仍即时发送。客户端动画由 ev 事件驱动，快照只做状态同步，延迟无感。
+  _syncSoon() {
+    if (this._syncPending) return;
+    const since = Date.now() - this._lastSyncAt;
+    const flush = () => {
+      this._syncPending = false;
+      if (!this.closed) this.lobby.onRoomsChanged();
+    };
+    if (since >= SNAPSHOT_MERGE_MS) { this._lastSyncAt = Date.now(); flush(); return; }
+    this._syncPending = true;
+    setTimeout(() => { this._lastSyncAt = Date.now(); flush(); }, SNAPSHOT_MERGE_MS - since);
+  }
 
   // ── 玩家管理 ───────────────────────────────────────
   addPlayer(token, name, avatar) {
@@ -386,10 +406,8 @@ export class Room {
       this._rec.actions.push({ k: 'street', street: ev.street, cards: ev.cards });
       this._rec.board = ev.cards;
     }
-    if (ev.kind !== 'hole' && ev.kind !== 'action_required') {
-      this.broadcast({ t: 'ev', ...ev });
-    }
-    this.lobby.onRoomsChanged();
+    if (!CLIENT_EV_SKIP.has(ev.kind)) this.broadcast({ t: 'ev', ...ev });
+    this._syncSoon();
   }
 
   _botAct(p) {
