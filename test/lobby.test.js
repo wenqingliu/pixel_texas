@@ -41,5 +41,37 @@ function assert(cond, msg) {
   assert(!r3.ok && r3.err === 'not_host', '非房主改设置被拒');
 }
 
+// ── 档案/会话过期清理 ────────────────────────────────
+{
+  class FakeWS { constructor() { this.readyState = 1; this.inbox = []; } send() {} close() { this.readyState = 3; } }
+  const { Lobby } = await import('../server/lobby.js');
+  const now = Date.now();
+  const lobby = new Lobby();
+  const mk = (name, seenDaysAgo) => ({ name, avatar: '', createdAt: now - seenDaysAgo * 86400e3, lastSeen: now - seenDaysAgo * 86400e3 });
+  lobby.profiles['stale'] = mk('老玩家', 91);                 // 90 天未活跃 → 清除
+  lobby.profiles['fresh'] = mk('常客', 10);                   // 活跃 → 保留
+  lobby.profiles['tok-old'] = mk('回归者', 30);               // 档案活跃 → 保留
+  lobby.tokens.set('tok-old', { token: 'tok-old', name: '回归者', ws: null, roomId: null, connected: false, disconnectedAt: now - 25 * 3600e3 }); // 断线超 24h → 清除
+
+  const changed = lobby.prune(now);
+  assert(changed, '清理发生变更');
+  assert(!Object.prototype.hasOwnProperty.call(lobby.profiles, 'stale'), '90 天未活跃档案已清除');
+  assert(lobby.profiles['fresh'] && lobby.profiles['fresh'].name === '常客', '活跃档案保留');
+  assert(!lobby.tokens.has('tok-old'), '断线超 24h 会话已清除');
+  assert(lobby.profiles['tok-old'], '会话清除但档案保留');
+  assert(!lobby.prune(now), '再次清理无变更');
+
+  // 携带被清理的 token 重登 → 凭档案复活，token 不换发、数据不丢
+  const ws = new FakeWS();
+  const t = lobby.login(ws, '回归者', 'tok-old');
+  assert(t === 'tok-old', '被清理的 token 凭档案复活');
+  assert(lobby.profileOf('tok-old').name === '回归者', '复活后档案数据保留');
+  assert(lobby.tokens.get('tok-old').connected === true, '复活会话标记在线');
+
+  // 无档案的陌生 token → 换发新 token（维持原语义）
+  const t2 = lobby.login(new FakeWS(), '新人', 'deadbeef');
+  assert(t2 !== 'deadbeef', '无档案的旧 token 换发新 token');
+}
+
 console.log(fails === 0 ? 'lobby 校验全部通过 ✓' : `lobby 校验有 ${fails} 项失败 ✗`);
 process.exit(fails === 0 ? 0 : 1);

@@ -32,11 +32,14 @@ export class Lobby {
   }
 
   profileOf(token) {
-    if (!this.profiles[token]) {
+    // hasOwnProperty 防御：token 来自客户端，'constructor' 等原型链键不能被当作已有档案
+    if (!Object.prototype.hasOwnProperty.call(this.profiles, token)) {
       this.profiles[token] = { name: '', avatar: '', stats: emptyStats(), createdAt: Date.now() };
     }
-    if (!this.profiles[token].stats) this.profiles[token].stats = emptyStats();
-    return this.profiles[token];
+    const p = this.profiles[token];
+    if (!p.stats) p.stats = emptyStats();
+    p.lastSeen = Date.now();
+    return p;
   }
 
   // hand_stats → 个人档案（按 token，跨房间累计）
@@ -106,9 +109,28 @@ export class Lobby {
   }
 
   // ── 玩家 ───────────────────────────────────────────
+  // 过期清理：档案 90 天未活跃、会话断线超 24 小时即清除。
+  // 有档案的 token 重登时可复活会话（见 login），清理不会丢玩家身份。
+  prune(now = Date.now()) {
+    const PROFILE_TTL = 90 * 86400e3, TOKEN_TTL = 24 * 3600e3;
+    let changed = false;
+    for (const tok of Object.keys(this.profiles)) {
+      const p = this.profiles[tok];
+      if (now - (p.lastSeen || p.createdAt || 0) > PROFILE_TTL) { delete this.profiles[tok]; changed = true; }
+    }
+    for (const [tok, t] of [...this.tokens]) {
+      if (!t.connected && t.disconnectedAt && now - t.disconnectedAt > TOKEN_TTL) { this.tokens.delete(tok); changed = true; }
+    }
+    if (changed) saveSoon('profiles', this.profiles);
+    return changed;
+  }
+
   login(ws, name, oldToken) {
+    this.prune();
     let token = oldToken;
-    if (!token || !this.tokens.has(token)) {
+    // token 不在活跃会话里时，只要它名下还有档案就复用（会话被清理后老玩家不丢身份）
+    const hasOwnProfile = token && Object.prototype.hasOwnProperty.call(this.profiles, token);
+    if (!token || (!this.tokens.has(token) && !hasOwnProfile)) {
       token = crypto.randomBytes(16).toString('hex');
     }
     const prev = this.tokens.get(token);
@@ -123,7 +145,7 @@ export class Lobby {
     if (!profile.name && !name) profile.name = '玩家' + (++this.nameSeq);
     const cleanName = String(name || '').trim().slice(0, 12) || profile.name || ('玩家' + (++this.nameSeq));
     profile.name = cleanName;
-    this.tokens.set(token, { token, name: cleanName, avatar: profile.avatar || '', ws, roomId: prev ? prev.roomId : null });
+    this.tokens.set(token, { token, name: cleanName, avatar: profile.avatar || '', ws, roomId: prev ? prev.roomId : null, connected: true, disconnectedAt: 0 });
     ws._token = token;
     // 断线重连回房
     if (prev && prev.roomId) {
@@ -133,6 +155,16 @@ export class Lobby {
         this.sendTo(token, room.snapshot(token));
       } else {
         this.tokens.get(token).roomId = null;
+      }
+    } else {
+      // 会话条目被清理后重登：按 token 搜房间恢复在房状态
+      for (const room of this.rooms.values()) {
+        if (room.players.has(token)) {
+          room.reconnect(token, ws);
+          this.tokens.get(token).roomId = room.code;
+          this.sendTo(token, room.snapshot(token));
+          break;
+        }
       }
     }
     saveSoon('profiles', this.profiles);
@@ -163,6 +195,7 @@ export class Lobby {
     const p = this.tokens.get(token);
     if (!p) return;
     p.connected = false;
+    p.disconnectedAt = Date.now();
     if (p.roomId) {
       const room = this.rooms.get(p.roomId);
       if (room && room.players.has(token)) room.markDisconnected(token);

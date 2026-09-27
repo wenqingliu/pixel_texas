@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const DATA_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
+// 数据目录：默认 <项目>/data，可用 PT_DATA_DIR 环境变量隔离（测试用）
+const DATA_DIR = process.env.PT_DATA_DIR
+  ? path.resolve(process.env.PT_DATA_DIR)
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
 
 export function load(name, def) {
   try {
