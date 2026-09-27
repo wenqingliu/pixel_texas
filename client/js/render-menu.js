@@ -46,11 +46,12 @@ export function drawMenu(ctx, S, act) {
   });
   drawPixelText(ctx, '～ 德州像素扑克 ～', W / 2, 114, 20, th.accent, 'center');
 
-  // 个人入口：头像 + 昵称
+  // 个人中心入口：左上角头像 + 昵称
   const av = S.avatar || S.defaultAv || 'p1.c1';
-  if (button(ctx, 'avatarBtn', 262, 186, 46, 42, '', { fill: '#181334' })) act.openProfile();
-  drawAvatar(ctx, 267, 189, 36, av, { border: th.accent });
-  if (textButton(ctx, 'editProfile', 316, 172, 12, '[个人中心]')) act.openProfile();
+  if (button(ctx, 'avatarBtn', 16, 14, 46, 42, '', { fill: '#181334' })) act.openProfile();
+  drawAvatar(ctx, 21, 17, 36, av, { border: th.accent });
+  drawPixelText(ctx, S.nameInput || '玩家', 72, 20, 14, th.text);
+  drawPixelText(ctx, '[个人中心]', 72, 38, 10, th.textFaint);
 
   // 主按钮列
   const bx = W / 2 - 120, bw = 240, bh = 42;
@@ -59,7 +60,7 @@ export function drawMenu(ctx, S, act) {
     ['quick', 294, '快速匹配', { size: 16 }, () => act.quickMatch()],
     ['tourney', 342, '快速锦标赛', { fill: '#4a1f5c', border: '#c07bee', color: '#ecd1ff', size: 16 }, () => act.quickTournament()],
     ['create', 390, '创建房间', { size: 16 }, () => act.createRoom()],
-    ['join', 438, '输入房间码加入', { size: 16 }, () => act.toggleJoin()],
+    ['rooms', 438, '房间大厅', { size: 16 }, () => act.openRooms()],
   ];
   menuBtns.forEach(([id, by, label, opts, fn], i) => {
     const k = menuK(S, 0.12 + i * 0.06);
@@ -70,15 +71,8 @@ export function drawMenu(ctx, S, act) {
     ctx.restore();
   });
 
-  if (S.joinOpen) {
-    drawPixelText(ctx, '房间码', W / 2 - 150, 492, 13, '#9a92c2');
-    S.dom.join.x = W / 2 - 150; S.dom.join.y = 506; S.dom.join.w = 200; S.dom.join.h = 30;
-    if (button(ctx, 'joingo', W / 2 + 65, 506, 85, 30, '加入', { fill: '#1e4433', border: '#66bb6a', size: 13 })) act.joinConfirm();
-  }
-  // 昵称输入框位置（个人中心未开时显示）
-  if (S.panel !== 'profile') {
-    S.dom.name.x = 316; S.dom.name.y = 186; S.dom.name.w = 190; S.dom.name.h = 40;
-  }
+  // 菜单上不显示昵称输入框（编辑入口在个人中心）
+  S.dom.name.w = 0;
 
   // 右上：设置卡片（主题 / 音效 / 音乐 / 曲目），不再贴着屏幕顶边
   panelRect(ctx, 778, 12, 168, 174);
@@ -97,23 +91,7 @@ export function drawMenu(ctx, S, act) {
   const tci = cycle(ctx, 'track', 790, 158, 146, '', trackNames, Math.max(0, trackIds.indexOf(S.track)));
   if (trackIds[tci] !== S.track) act.setTrack(trackIds[tci]);
 
-  // 房间列表：条目两行（行1 房间码 + 模式；行2 人数/座位/状态/盲注）
-  drawPixelText(ctx, '▸ 房间列表', 640, 170, 16, '#f4efe3');
-  if (!S.rooms.length) drawPixelText(ctx, '暂无公开房间，创建一个吧', 640, 196, 13, '#8b85ad');
-  const listK = menuK(S, 0.3);
-  ctx.save();
-  ctx.globalAlpha = listK;
-  ctx.translate((1 - listK) * 40, 0);
-  S.rooms.slice(0, 5).forEach((r, i) => {
-    const y = 196 + i * 46;
-    const tour = r.mode === 'tournament';
-    if (button(ctx, 'room' + r.code, 640, y, 300, 40, '', { fill: '#241f42', border: tour ? '#c07bee' : undefined })) act.joinCode(r.code);
-    drawPixelText(ctx, r.code, 652, y + 6, 14, '#ffd76e');
-    drawPixelText(ctx, tour ? '锦标赛' : '现金桌', 932, y + 7, 11, tour ? '#c07bee' : '#8b85ad', 'right');
-    drawPixelText(ctx, `${r.humans}人 · ${r.seated}/${r.maxSeats}座${r.playing ? ' · 对局中' : ''} · ${r.sb}/${r.bb}`, 652, y + 23, 10, '#8b85ad');
-  });
-
-  ctx.restore();
+  // 公开房间在「房间大厅」二级界面浏览（房间列表按钮进入）
   drawPixelText(ctx, '和朋友局域网联机：把页面顶部地址发给对方即可', W / 2, 522, 12, '#8b85ad', 'center');
 }
 

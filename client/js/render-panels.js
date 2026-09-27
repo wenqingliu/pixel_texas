@@ -7,7 +7,7 @@ import { drawAvatar, AVATAR_COUNT, AVATAR_COLORS, defaultAvatar } from './avatar
 import { W, H } from './render-core.js';
 import { ACHIEVEMENTS } from '../../shared/achievements.js';
 
-function panelFrame(ctx, title, w, h) {
+export function panelFrame(ctx, title, w, h) {
   const th = getTheme();
   const x = W / 2 - w / 2, y = H / 2 - h / 2;
   ctx.fillStyle = 'rgba(10, 8, 22, 0.92)';
@@ -29,6 +29,30 @@ export function drawPanels(ctx, S, act) {
   else if (S.panel === 'history') drawHistoryPanel(ctx, S, act);
   else if (S.panel === 'replay' && S.replay) drawReplayPanel(ctx, S, act);
   else if (S.panel === 'profile') drawProfilePanel(ctx, S, act);
+  else if (S.panel === 'rooms') drawRoomsPanel(ctx, S, act);
+}
+
+// ── 房间大厅（二级界面）：房间码加入 + 公开房间列表 ──
+export function drawRoomsPanel(ctx, S, act) {
+  const th = getTheme();
+  const f = panelFrame(ctx, '房间大厅', 640, 440);
+  if (!f) { act.closePanel(); return; }
+  // 房间码加入
+  drawPixelText(ctx, '输入房间码', f.x + 24, f.y + 52, 13, th.textDim);
+  S.dom.join.x = f.x + 110; S.dom.join.y = f.y + 42; S.dom.join.w = 180; S.dom.join.h = 32;
+  if (button(ctx, 'joingo', f.x + 302, f.y + 42, 85, 32, '加入', { fill: '#1e4433', border: '#66bb6a', size: 13 })) act.joinConfirm();
+  // 公开房间列表（两行条目）
+  drawPixelText(ctx, '▸ 公开房间', f.x + 24, f.y + 98, 14, th.text);
+  if (!S.rooms.length) drawPixelText(ctx, '暂无公开房间，创建一个吧', f.x + 24, f.y + 124, 13, th.textFaint);
+  S.rooms.slice(0, 6).forEach((r, i) => {
+    const y = f.y + 112 + i * 46;
+    const tour = r.mode === 'tournament';
+    if (button(ctx, 'room' + r.code, f.x + 24, y, f.w - 48, 40, '', { fill: th.panel, border: tour ? '#c07bee' : undefined })) act.joinCode(r.code);
+    drawPixelText(ctx, r.code, f.x + 36, y + 6, 14, th.gold);
+    drawPixelText(ctx, tour ? '锦标赛' : '现金桌', f.x + f.w - 36, y + 7, 11, tour ? '#c07bee' : th.textFaint, 'right');
+    drawPixelText(ctx, `${r.humans}人 · ${r.seated}/${r.maxSeats}座${r.playing ? ' · 对局中' : ''} · ${r.sb}/${r.bb}`, f.x + 36, y + 23, 10, th.textFaint);
+  });
+  drawPixelText(ctx, '和朋友局域网联机：把页面顶部地址发给对方即可', W / 2, f.y + f.h - 26, 12, th.textFaint, 'center');
 }
 
 // ── 个人中心 ────────────────────────────────────────
