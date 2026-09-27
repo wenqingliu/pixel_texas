@@ -1,184 +1,241 @@
-// 像素头像：12 个 16×16 精绘角色 × 8 主色，编码 "p<图案>.c<颜色>"
+// 像素头像：12 个 32×32 精绘角色 × 8 主色，编码 "p<图案>.c<颜色>"
+// 绘制采用"半幅镜像"：每个图案只手绘左半 16 列，渲染时镜像补全右半 —— 天然对称、必然居中。
 // 字符图例：X=主色 L=主色亮部 D=主色暗部 W=白 K=深线 R=红 G=金
-// 渲染时自动生成主色明暗两档，并给图案整体加一圈深色外描边（贴纸质感）
+// 渲染：主色自动生成明暗两档；图案整体自动外描边（贴纸轮廓）；垂直居中；底板带落地阴影。
 const PATTERNS = [
-  // 1 国王
+  // 1 国王：金冠红宝石 + 白脸长须 + 主色王袍
   [
-    '...G...GG...G...',
-    '...GG..GG..GG...',
-    '...GGG.GG.GGG...',
-    '...GGGGGGGGGG...',
-    '...GGGRRRRGGG...',
-    '...GGGGGGGGGG...',
-    '....WWWWWWWW....',
-    '....WKWWWWKW....',
-    '....WWWWWWWW....',
-    '...WWWWWWWWWW...',
-    '...WWWWWWWWWW...',
-    '..WWWWWWWWWWWW..',
-    '..XXXXXXXXXXXX..',
-    '..XXLXXXXXXDXX..',
-    '..XXXXXXXXXXXX..',
-    '..DDDDDDDDDDDD..',
+    '.....GGGG....GGG',
+    '....GGGGGG...GGG',
+    '....GGGGGGGGGGGG',
+    '....GGGRRRGGGGGG',
+    '....GGGGGGGGGGGG',
+    '......WWWWWWWWWW',
+    '......WWKKWWWWWW',
+    '......WWKKWWWWWW',
+    '......WWWWWWWWWW',
+    '......WWWWWWWWWW',
+    '.....WWWWWWWWWWW',
+    '.....WWWWWWWWWWW',
+    '.....WWWWWWWWWWW',
+    '....WWWWWWWWWWWW',
+    '....WWWWWWWWWWWW',
+    '....WWWWWWWWWWWW',
+    '....XXXXXXXXXXXX',
+    '....XXXXXXXXXXXX',
+    '....XXXXXXXXXXXX',
+    '....XXXXXXXXXXXX',
+    '....XXXXXXXXXXXX',
+    '....DDDDDDDDDDDD',
   ],
-  // 2 猫
+  // 2 猫：尖耳竖瞳 + 红鼻
   [
-    '..X..........X..',
-    '..XX........XX..',
-    '..XDX......XDX..',
-    '..XXXXXXXXXXXX..',
-    '.XXXXXXXXXXXXXX.',
-    '.XLXXXXXXXXXXDX.',
-    '.XWWKXXXXXXKWWX.',
-    '.XXXXXXXXXXXXXX.',
-    '..XXXXXRRXXXXX..',
-    '..XXXXXXXXXXXX..',
-    '.XXXXXXXXXXXXXX.',
-    '.XX.XX.XX.XX.XX.',
+    '.....XXX........',
+    '....XXXXX.......',
+    '....XXDXX.......',
+    '...XXXXXXXXXXXXX',
+    '...XXXXXXXXXXXXX',
+    '...XLXXXXXXXXXXX',
+    '...XXXXXXXXWWKXX',
+    '...XXXXXXXXWWKXX',
+    '...XXXXXXXXXXXXX',
+    '...XXXXXXXXXXXXR',
+    '...XXXXXXXXXXXXK',
+    '...XXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '.XXXXXXXXXXXXXXX',
   ],
-  // 3 青蛙
+  // 3 青蛙：头顶大眼 + 宽嘴
   [
-    '..XXX......XXX..',
-    '.XWWKX....XKWWX.',
-    '.XWWKX....XKWWX.',
-    '.XXXXXXXXXXXXXX.',
-    'XWLXXXXXXXXXXDWX',
+    '.....XXXXX......',
+    '....XXXXXXX.....',
+    '....XWWKXXX.....',
+    '....XWWKXXX.....',
+    '..XXXXXXXXXXXXXX',
+    '.XXXXXXXXXXXXXXX',
+    'XXXXXXXXXXXXXXXX',
+    'XXLXXXXXXXXXXXXX',
+    'XXXXXXXXXXXXXXXX',
+    'XXXXXXXXXXXKKKKK',
+    'XXXXXXXXXXXXXXXX',
+    '.XXXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '.XXX..XXXX..XXX.',
+  ],
+  // 4 机器人：天线红灯 + 屏幕眼 + 格栅嘴 + 胸灯
+  [
+    '...............R',
+    '..............XX',
+    '..............XX',
+    '....XXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXWWWWXXXWWWWX',
+    '..XXWWKKXXXKKWWX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXKKKKKKXXXXX',
+    '..........XXXXXX',
+    '...XXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXXRXXXXRXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..DDDDDDDDDDDDDD',
+    '....XXXXXX......',
+    '....XXXXXX......',
+    '...XXXXXXX......',
+  ],
+  // 5 幽灵：白瞳 + 波浪裙摆
+  [
+    '.........XXXXXXX',
+    '.......XXXXXXXXX',
+    '.....XXXXXXXXXXX',
+    '....XXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXWWKXXXXXXXX',
+    '..XXXWWKXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XLXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXXXX..XXXXXX',
+    '..XXX..XXXX..XXX',
+  ],
+  // 6 外星人：大头斜眼
+  [
+    '.........XXXXXXX',
+    '.......XXXXXXXXX',
+    '.....XXXXXXXXXXX',
+    '....XXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '.XXXXXXXXXXXXXXX',
     'XXXXXXXXXXXXXXXX',
     'XXXXXXXXXXXXXXXX',
-    '.XXXXXXXXXXXXXX.',
-    '..XXXXXXXXXXXX..',
-    '.XX.XXXXXXXX.XX.',
-    'XX...XXXXXX...XX',
+    'XXXXXKKKKXXXXXXX',
+    'XXXXKKKKKXXXXXXX',
+    'XXXXXKKKKXXXXXXX',
+    'XXXXXXXXXXXXXXXX',
+    'XXXXXXXXXXXXXXXX',
+    'XXXXXXXXXXXXXXKK',
+    'XXXXXXXXXXXXXXXX',
+    '.XXXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '....XXXXXXXXXXXX',
+    '......XXXXXXXXXX',
   ],
-  // 4 机器人
+  // 7 王冠：三尖金冠 + 红宝石
   [
-    '.......RR.......',
-    '.......XX.......',
-    '....XXXXXXXX....',
-    '...XXXXXXXXXX...',
-    '..XXXXXXXXXXXX..',
-    '..XLWWXXXXWWDX..',
-    '..XLWKXXXXWKDX..',
-    '..XXXXXXXXXXXX..',
-    '..XXXKKKKKKXXX..',
-    '.....XDXXDX.....',
-    '..XXXXXXXXXXXX..',
-    '..XXLXXXXXXDXX..',
-    '..XXLXXXXXXDXX..',
-    '...XX......XX...',
+    '....GGG.......GG',
+    '....GGGG......GG',
+    '....GGGGG.....GG',
+    '....GGGGGG....GG',
+    '....GGGGGGG...GG',
+    '....GGGGGGGG..GG',
+    '....GGGGGGGGGGGG',
+    '....GGGGGGGGGGGG',
+    '....GGRGGGGGGRGG',
+    '....GGGGGGGGGGRG',
+    '....GGGGGGGGGGGG',
   ],
-  // 5 幽灵
+  // 8 骷髅：眼洞 + 鼻孔 + 牙缝
   [
-    '.....XXXXXX.....',
-    '...XXXXXXXXXX...',
-    '..XXXXXXXXXXXX..',
-    '..XXWWXXXWWXXX..',
-    '..XXWKXXXWKXXX..',
-    '..XXXXXXXXXXXX..',
-    '..XXXXXXXXXXXX..',
-    '..XLXXXXXXXXDX..',
-    '..XXXXXXXXXXXX..',
-    '..XXXXXXXXXXXX..',
-    '..XXXXXXXXXXXX..',
-    '.XX..XX..XX..XX.',
+    '.........WWWWWWW',
+    '.......WWWWWWWWW',
+    '.....WWWWWWWWWWW',
+    '....WWWWWWWWWWWW',
+    '..WWWWWWWWWWWWWW',
+    '..WWWWWWWWWWWWWW',
+    '..WKKKKWWWWWWWWW',
+    '..WKKKKWWWWWWWWW',
+    '..WKKKKWWWWWWWWW',
+    '..WWWWWKKKWWWWWW',
+    '..WWWWWWWWWWWWWW',
+    '..WWWWWWWWWWWWWW',
+    '..WWWWWWWWWWWWWW',
+    '...WWWWWWWWWWWWW',
+    '...WWKWWKWWKWWWW',
+    '...WWKWWKWWKWWWW',
+    '....WWWWWWWWWWWW',
   ],
-  // 6 外星人
+  // 9 恶魔：弯角 + 白牙
   [
-    '.....XXXXXX.....',
-    '...XXXXXXXXXX...',
-    '..XXXXXXXXXXXX..',
-    '.XXXXXXXXXXXXXX.',
-    '.XXWWKXXKWWXXXX.',
-    '.XXWKKXXKKWXXXX.',
-    '.XXXXXXXXXXXXXX.',
-    '.XLXXXXXXXXXXDX.',
-    '..XXXXXXXXXXXX..',
-    '..XXXKKXXKKXXX..',
-    '...XX.XXXX.XX...',
+    '..XXX...........',
+    '.XXXX...........',
+    '..XXXX..........',
+    '...XXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '.XXXXXXXXXXXXXXX',
+    'XXXXXXXXXXXXXXXX',
+    'XXLXXXXXXXXXXXXX',
+    'XXXXXXXXXKKKXXXX',
+    'XXXXXXXXXKKKXXXX',
+    'XXXXXXXXXXXXXXXX',
+    'XXXXXXXXXXXXXXXX',
+    'XXXXXXXXKKKKKXXX',
+    'XXXXXXXXWWXXWWXX',
+    'XXXXXXXXXXXXXXXX',
+    '.XXXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '....XXXXXXXXXXXX',
   ],
-  // 7 王冠
+  // 10 独眼怪：大眼珠
   [
-    '..G....GG....G..',
-    '..GG...GG...GG..',
-    '..GGG..GG..GGG..',
-    '..GGGG.GG.GGGG..',
-    '..GGGGGGGGGGGG..',
-    '..GLGGGGGGGGDG..',
-    '..GGGGGGGGGGGG..',
-    '..GGRGGGGGGRGG..',
-    '..GGGGGRRGGGGG..',
-    '..GGGGGGGGGGGG..',
+    '........XXXXXXXX',
+    '......XXXXXXXXXX',
+    '....XXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '.XXXXXXXXXXXXXXX',
+    'XXXXXXXXXXXXXXXX',
+    'XXXXXXXXXXXXXXXX',
+    'XXXXWWWWWWWWXXXX',
+    'XXXWWWWWWWWWWXXX',
+    'XXXWWWWWWWWWWKKX',
+    'XXXWWWWWWWWWWKKX',
+    'XXXWWWWWWWWWWXXX',
+    'XXXXWWWWWWWWXXXX',
+    'XXXXXXXXXXXXXXXX',
+    'XXLXXXXXXXXXXXXX',
+    'XXXXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '.XXX..XXXX..XXXX',
   ],
-  // 8 骷髅
+  // 11 蘑菇：斑点伞盖 + 白柄
   [
-    '.....XXXXXX.....',
-    '...XXXXXXXXXX...',
-    '..XXXXXXXXXXXX..',
-    '.XXXXXXXXXXXXXX.',
-    '.XLXXXXXXXXXXDX.',
-    '.XXKKKXXXXKKKXX.',
-    '.XXKKKXXXXKKKXX.',
-    '.XXXXXXXXXXXXXX.',
-    '..XXXXXKKXXXXX..',
-    '..XXXXXXXXXXXX..',
-    '...XXXXXXXXXX...',
-    '....XX.XX.XX....',
+    '........XXXXXXXX',
+    '......XXXXXXXXXX',
+    '....XXXXXXXXXXXX',
+    '..XXWWXXXXWWXXXX',
+    '.XXWWWWXXWWWWXXX',
+    '.XXWWWWXXWWWWXXX',
+    '.XXXXXXXXXXXXXXX',
+    '.XXXXXXXXXXXXXXX',
+    '...XXXXXXXXXXXXX',
+    '......WWWWWWWWWW',
+    '......WWKKWWWWWW',
+    '......WWWWWWWWWW',
+    '......WWWWWWWWWW',
+    '......WWWWWWWWWW',
   ],
-  // 9 恶魔
+  // 12 忍者：红额带 + 露眼缝
   [
-    '.XX..........XX.',
-    '.XDX........XDX.',
-    '..XDX......XDX..',
-    '..XXXXXXXXXXXX..',
-    '.XXXXXXXXXXXXXX.',
-    '.XLXXXXXXXXXXDX.',
-    '.XXKKXXXXXXKKXX.',
-    '.XXXXXXXXXXXXXX.',
-    '..XXXXXXXXXXXX..',
-    '..XXXKKKKKKXXX..',
-    '..XXWWXXXXWWXX..',
-    '...XX......XX...',
-  ],
-  // 10 独眼怪
-  [
-    '.....XXXXXX.....',
-    '...XXXXXXXXXX...',
-    '..XXXXXXXXXXXX..',
-    '.XXXXXXXXXXXXXX.',
-    '.XXWWWWWWWWWWXX.',
-    '.XXWWWWKKWWWWXX.',
-    '.XXWWWWKKWWWWXX.',
-    '.XXWWWWWWWWWWXX.',
-    '.XXXXXXXXXXXXXX.',
-    '..XXXXXXXXXXXX..',
-    '.XX..XX..XX..XX.',
-  ],
-  // 11 蘑菇
-  [
-    '.....XXXXXX.....',
-    '...XXXXXXXXXX...',
-    '..XXWWXXXWWXXX..',
-    '.XXWWWWXXWWXXXX.',
-    '.XXXXXXXXXXXXXX.',
-    '.XLXXXXXXXXXXDX.',
-    '....XXXXXXXX....',
-    '....XWWWWWWX....',
-    '....XWWWWWWX....',
-    '....XXXXXXXX....',
-  ],
-  // 12 忍者
-  [
-    '......XXXX......',
-    '...XXXXXXXXXX...',
-    '..XXXXXXXXXXXX..',
-    '..XXWWWWWWWWXX..',
-    '..XWWKXXXXKWWX..',
-    '..XXRRRRRRRRXX..',
-    '..XXXXXXXXXXXX..',
-    '..XLXXXXXXXXDX..',
-    '..XXXXXXXXXXXX..',
-    '...XXXXXXXXXX...',
-    '....XXXXXXXX....',
+    '......XXXXXXXXXX',
+    '....XXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXRRRRRRRRXXXX',
+    '..XXWWWWWWWWXXXX',
+    '..XXWWWWWKKWXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XLXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '..XXXXXXXXXXXXXX',
+    '...XXXXXXXXXXXXX',
+    '....XXXXXXXXXXXX',
   ],
 ];
 
@@ -217,9 +274,12 @@ export function drawAvatar(ctx, x, y, size, av, opts = {}) {
     ci = (parseInt(av.split('.c')[1], 10) - 1) % AVATAR_COLORS.length;
   }
   const main = AVATAR_COLORS[(ci + AVATAR_COLORS.length) % AVATAR_COLORS.length];
-  const rows = PATTERNS[pi];
-  const px = size / 16;
-  const solid = (r, c) => r >= 0 && r < rows.length && c >= 0 && c < 16 && rows[r][c] !== '.';
+  // 半幅镜像补全（左半 16 列 → 全幅 32 列），天然左右对称、必然水平居中
+  const rows = PATTERNS[pi].map(r => r + [...r].reverse().join(''));
+  const H = rows.length;
+  const oy = Math.floor((32 - H) / 2); // 垂直居中
+  const px = size / 32;
+  const solid = (r, c) => r >= 0 && r < H && c >= 0 && c < 32 && rows[r][c] !== '.';
   ctx.save();
   // 底板：暗底 + 底部落地阴影
   ctx.fillStyle = opts.bg || '#14102b';
@@ -228,21 +288,21 @@ export function drawAvatar(ctx, x, y, size, av, opts = {}) {
   ctx.fillRect(x, y + size * 0.74, size, size * 0.26);
   // 自动外描边：空位且四邻有实体 → 深色，勾出贴纸轮廓
   ctx.fillStyle = '#0d0b18';
-  for (let r = 0; r < rows.length; r++) {
-    for (let c = 0; c < 16; c++) {
+  for (let r = 0; r < H; r++) {
+    for (let c = 0; c < 32; c++) {
       if (solid(r, c)) continue;
       if (solid(r - 1, c) || solid(r + 1, c) || solid(r, c - 1) || solid(r, c + 1)) {
-        ctx.fillRect(x + c * px, y + r * px, px + 0.4, px + 0.4);
+        ctx.fillRect(x + c * px, y + (r + oy) * px, px + 0.4, px + 0.4);
       }
     }
   }
   // 图案
-  rows.forEach((row, y2) => {
-    for (let x2 = 0; x2 < row.length; x2++) {
-      const ch = row[x2];
+  rows.forEach((row, r) => {
+    for (let c = 0; c < 32; c++) {
+      const ch = row[c];
       if (ch === '.') continue;
       ctx.fillStyle = glyphColor(ch, main);
-      ctx.fillRect(x + x2 * px, y + y2 * px, px + 0.4, px + 0.4);
+      ctx.fillRect(x + c * px, y + (r + oy) * px, px + 0.4, px + 0.4);
     }
   });
   ctx.strokeStyle = opts.border || main;
