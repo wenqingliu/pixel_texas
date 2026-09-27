@@ -130,6 +130,14 @@ export function botDecide(p, hand, reads = null) {
   // 所有档位通用：免费牌永远看
   if (toCall === 0 && !o.canRaise) return { type: 'check' };
 
+  const raiseTo = (x) => {
+    let to = Math.round(x);
+    to = Math.max(to, o.minRaiseTo);
+    to = Math.min(to, o.maxRaiseTo);
+    if (to >= o.maxRaiseTo * 0.9) return { type: 'raise', amount: o.maxRaiseTo }; // 接近全下就直接推
+    return { type: 'raise', amount: to };
+  };
+
   // ── 人格覆盖（挑战关卡）：性格即策略，亮在性格卡上就真这么打 ──
   if (p.persona === 'station') {
     // 跟注站：翻牌后任何下注都跟，直到全下
@@ -152,14 +160,6 @@ export function botDecide(p, hand, reads = null) {
     if (strong && o.canRaise && r < 0.6) return raiseTo(Math.max(bb * 2, pot * 0.5));
     return { type: 'check' };
   }
-
-  const raiseTo = (x) => {
-    let to = Math.round(x);
-    to = Math.max(to, o.minRaiseTo);
-    to = Math.min(to, o.maxRaiseTo);
-    if (to >= o.maxRaiseTo * 0.9) return { type: 'raise', amount: o.maxRaiseTo }; // 接近全下就直接推
-    return { type: 'raise', amount: to };
-  };
 
   // ── 休闲：松且被动，爱跟注，几乎不弃大牌 ───────────
   if (level === 'easy') {

@@ -74,5 +74,37 @@ const WEAK = [(6 << 2) | 0, (2 << 2) | 1];
   console.log(`  带画像决策合法性: ${n} 次全部合法`);
 }
 
+// ── 人格决策合法性：三种人格全桌对跑，防 TDZ/非法决策回归 ──
+{
+  let bad = 0, n = 0, hands = 0;
+  for (let i = 0; i < 30; i++) {
+    const players = [0, 1, 2].map(k => ({
+      seat: k, name: '人格' + k, chips: 2000, isBot: true, level: 'hard',
+      persona: ['station', 'maniac', 'rock'][k],
+    }));
+    const hand = new Hand(players, { sb: 10, bb: 20, button: i % 3, handNo: 1 }, () => {});
+    hand.start();
+    hands++;
+    let guard = 0;
+    while (hand.phase !== 'done' && guard++ < 400) {
+      if (hand.phase === 'runout') { hand.advanceRunout(); continue; }
+      const seat = hand.awaitingSeat();
+      if (seat == null) break;
+      const p = hand.bySeat(seat);
+      const d = botDecide(p, hand);
+      const o = hand.options(p);
+      n++;
+      const okType = ['fold', 'check', 'call', 'raise'].includes(d.type);
+      const okRaise = d.type !== 'raise' || (d.amount >= Math.min(o.minRaiseTo, o.maxRaiseTo) && d.amount <= o.maxRaiseTo);
+      const okCheck = d.type !== 'check' || o.canCheck;
+      if (!okType || !okRaise || !okCheck) { bad++; break; }
+      const res = hand.applyAction(seat, d.type, d.amount);
+      if (!res.ok) { bad++; if (bad <= 3) console.error('  ✗ applyAction 拒绝: ' + res.err + ' ' + JSON.stringify(d)); break; }
+    }
+  }
+  assert(bad === 0, `人格对跑 ${hands} 手 ${n} 次决策中 ${bad} 次非法`);
+  console.log(`  人格决策合法性: ${hands} 手 / ${n} 次决策全部合法`);
+}
+
 console.log(fails === 0 ? 'bot 回归全部通过 ✓' : `bot 回归有 ${fails} 项失败 ✗`);
 process.exit(fails === 0 ? 0 : 1);

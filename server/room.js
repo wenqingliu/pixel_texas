@@ -413,7 +413,9 @@ export class Room {
           this.addTimer(() => {
             if (this.closed || !this.hand || this.hand.phase !== 'betting' || this.hand.awaitingSeat() !== p.seat) return;
             // 即使延迟期间重连也由 AI 打完这一手，避免无人行动卡局；下一个行动窗口交还真人
-            const d2 = botDecide(p, this.hand, this.stats);
+            let d2;
+            try { d2 = botDecide(p, this.hand, this.stats); }
+            catch (e) { console.error('[bot]', p.name, e); d2 = { type: this.hand.toCall(p) > 0 ? 'fold' : 'check' }; }
             const res2 = this.hand.applyAction(p.seat, d2.type, d2.amount);
             if (!res2.ok) this.hand.autoAction(p.seat);
           }, t0 + Math.random() * (t1 - t0));
@@ -542,7 +544,13 @@ export class Room {
     if (this.closed) return;
     const hand = this.hand;
     if (!hand || hand.phase !== 'betting' || hand.awaitingSeat() !== p.seat) return;
-    const d = botDecide(p, hand, this.stats); // 传入房间内对手画像
+    let d;
+    try {
+      d = botDecide(p, hand, this.stats); // 传入房间内对手画像
+    } catch (e) {
+      console.error('[bot]', p.name, e);  // 单次决策异常不能杀服务器，托管兜底
+      d = { type: hand.toCall(p) > 0 ? 'fold' : 'check' };
+    }
     const res = hand.applyAction(p.seat, d.type, d.amount);
     if (!res.ok) hand.autoAction(p.seat); // 决策异常时托管兜底
   }
