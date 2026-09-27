@@ -63,7 +63,11 @@ server/                 服务端（Node.js，唯一依赖 ws）
 shared/                 前后端共用模块（零依赖，服务器托管在 /shared/）
   evaluator.js          7 选 5 牌型评估核心：服务端与浏览器同一实现，不会漂移
 client/                 前端（原生 ES Module，无构建步骤）
-  js/render.js          主菜单 / 房间等待 / 牌桌 / 回放·战绩·个人中心面板（960×540）
+  js/render.js          渲染门面（re-export，main.js 导入面不变）
+  js/render-core.js     渲染共享核心：动画状态 / 下注模型 / 背景 / Toast
+  js/render-menu.js     主菜单 + 房间等待界面
+  js/render-table.js    牌桌 / 座位 / 英雄 / 行动面板 / 结算展示
+  js/render-panels.js   个人中心 / 战绩 / 回放面板
   js/cards.js           四色像素卡牌、花色点阵图、筹码堆
   js/avatar.js          像素头像（12 图案 × 8 色）
   js/theme.js           主题系统（经典绿桌/霓虹夜/赌场红绒/暗夜石墨）
