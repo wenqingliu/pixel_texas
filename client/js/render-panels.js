@@ -1,6 +1,6 @@
 // 面板：个人中心 / 战绩 / 回放列表 / 回放播放
 import { drawCard, fmt } from './cards.js';
-import { button, slider, POINTER } from './ui.js';
+import { button, cycle, slider, POINTER } from './ui.js';
 import { drawPixelText, ease } from './fx.js';
 import { getTheme } from './theme.js';
 import { drawAvatar, AVATAR_COUNT, AVATAR_COLORS, defaultAvatar } from './avatar.js';
