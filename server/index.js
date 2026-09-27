@@ -27,16 +27,19 @@ const MIME = {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
-  let file = path.normalize(path.join(CLIENT_DIR, decodeURIComponent(url.pathname)));
-  if (!file.startsWith(CLIENT_DIR)) { res.writeHead(403); res.end(); return; }
-  if (url.pathname === '/' || url.pathname === '') file = path.join(CLIENT_DIR, 'index.html');
+  const pathname = decodeURIComponent(url.pathname);
+  let file = path.normalize(path.join(CLIENT_DIR, pathname === '/' || pathname === '' ? 'index.html' : pathname));
+  // 前缀检查须带路径分隔符，防同级目录（如 client2）绕过
+  if (file !== CLIENT_DIR && !file.startsWith(CLIENT_DIR + path.sep)) { res.writeHead(403); res.end(); return; }
   fs.readFile(file, (err, buf) => {
     if (err) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end('404');
       return;
     }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    // 字体等静态资源内容稳定，允许长缓存；代码文件保持协商缓存
+    const cache = pathname.startsWith('/assets/') ? 'public, max-age=86400, immutable' : 'no-cache';
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': cache });
     res.end(buf);
   });
 });
