@@ -1,5 +1,6 @@
 // 像素头像：12 个 16×16 精绘角色 × 8 主色，编码 "p<图案>.c<颜色>"
-// 字符图例：X=主色 W=白 K=暗部 R=红 G=金
+// 字符图例：X=主色 L=主色亮部 D=主色暗部 W=白 K=深线 R=红 G=金
+// 渲染时自动生成主色明暗两档，并给图案整体加一圈深色外描边（贴纸质感）
 const PATTERNS = [
   // 1 国王
   [
@@ -9,42 +10,40 @@ const PATTERNS = [
     '...GGGGGGGGGG...',
     '...GGGRRRRGGG...',
     '...GGGGGGGGGG...',
-    '....XXXXXXXX....',
-    '...XXXXXXXXXX...',
-    '...XKKXXXXKKX...',
-    '...XXXXXXXXXX...',
-    '...XXWWXXWWXX...',
-    '...XXXXXXXXXX...',
+    '....WWWWWWWW....',
+    '....WKWWWWKW....',
+    '....WWWWWWWW....',
+    '...WWWWWWWWWW...',
     '...WWWWWWWWWW...',
     '..WWWWWWWWWWWW..',
-    '..WWW.WWWW.WWW..',
-    '...WWWWWWWWWW...',
+    '..XXXXXXXXXXXX..',
+    '..XXLXXXXXXDXX..',
+    '..XXXXXXXXXXXX..',
+    '..DDDDDDDDDDDD..',
   ],
   // 2 猫
   [
     '..X..........X..',
     '..XX........XX..',
-    '..XXX......XXX..',
+    '..XDX......XDX..',
     '..XXXXXXXXXXXX..',
     '.XXXXXXXXXXXXXX.',
+    '.XLXXXXXXXXXXDX.',
+    '.XWWKXXXXXXKWWX.',
     '.XXXXXXXXXXXXXX.',
-    '.XXKKXXXXXXKKXX.',
-    '.XXXXXXXXXXXXXX.',
-    '..XXXXXWWXXXXX..',
-    '.XXXXXXXXXXXXXX.',
+    '..XXXXXRRXXXXX..',
     '..XXXXXXXXXXXX..',
     '.XXXXXXXXXXXXXX.',
-    'XXXXXXXXXXXXXXXX',
     '.XX.XX.XX.XX.XX.',
   ],
   // 3 青蛙
   [
     '..XXX......XXX..',
-    '.XWKXX....XXKWX.',
-    '.XXXXX....XXXXX.',
+    '.XWWKX....XKWWX.',
+    '.XWWKX....XKWWX.',
     '.XXXXXXXXXXXXXX.',
+    'XWLXXXXXXXXXXDWX',
     'XXXXXXXXXXXXXXXX',
-    'XWXXXXXXXXXXXXWX',
     'XXXXXXXXXXXXXXXX',
     '.XXXXXXXXXXXXXX.',
     '..XXXXXXXXXXXX..',
@@ -53,19 +52,19 @@ const PATTERNS = [
   ],
   // 4 机器人
   [
-    '.......XX.......',
+    '.......RR.......',
     '.......XX.......',
     '....XXXXXXXX....',
+    '...XXXXXXXXXX...',
     '..XXXXXXXXXXXX..',
-    '..XWWXXXXXXWWX..',
+    '..XLWWXXXXWWDX..',
+    '..XLWKXXXXWKDX..',
     '..XXXXXXXXXXXX..',
-    '..XXXRXXXXRXXX..',
+    '..XXXKKKKKKXXX..',
+    '.....XDXXDX.....',
     '..XXXXXXXXXXXX..',
-    '.....XXXXXX.....',
-    '..XXXXXXXXXXXX..',
-    '..XXRKXXXXKRXX..',
-    '..XXXXXXXXXXXX..',
-    '..XXXXXXXXXXXX..',
+    '..XXLXXXXXXDXX..',
+    '..XXLXXXXXXDXX..',
     '...XX......XX...',
   ],
   // 5 幽灵
@@ -73,11 +72,11 @@ const PATTERNS = [
     '.....XXXXXX.....',
     '...XXXXXXXXXX...',
     '..XXXXXXXXXXXX..',
-    '..XXKKXXXXKKXX..',
-    '..XXKKXXXXKKXX..',
+    '..XXWWXXXWWXXX..',
+    '..XXWKXXXWKXXX..',
     '..XXXXXXXXXXXX..',
     '..XXXXXXXXXXXX..',
-    '..XXXXXXXXXXXX..',
+    '..XLXXXXXXXXDX..',
     '..XXXXXXXXXXXX..',
     '..XXXXXXXXXXXX..',
     '..XXXXXXXXXXXX..',
@@ -89,12 +88,12 @@ const PATTERNS = [
     '...XXXXXXXXXX...',
     '..XXXXXXXXXXXX..',
     '.XXXXXXXXXXXXXX.',
-    '.XXXKKXXXXKKXXX.',
-    '.XXXXKKXXKKXXXX.',
-    '.XXXXXKXXKXXXXX.',
+    '.XXWWKXXKWWXXXX.',
+    '.XXWKKXXKKWXXXX.',
     '.XXXXXXXXXXXXXX.',
+    '.XLXXXXXXXXXXDX.',
     '..XXXXXXXXXXXX..',
-    '..XXXXXXXXXXXX..',
+    '..XXXKKXXKKXXX..',
     '...XX.XXXX.XX...',
   ],
   // 7 王冠
@@ -104,9 +103,9 @@ const PATTERNS = [
     '..GGG..GG..GGG..',
     '..GGGG.GG.GGGG..',
     '..GGGGGGGGGGGG..',
+    '..GLGGGGGGGGDG..',
     '..GGGGGGGGGGGG..',
-    '..GGRRGGGGRRGG..',
-    '..GGGGGGGGGGGG..',
+    '..GGRGGGGGGRGG..',
     '..GGGGGRRGGGGG..',
     '..GGGGGGGGGGGG..',
   ],
@@ -116,30 +115,29 @@ const PATTERNS = [
     '...XXXXXXXXXX...',
     '..XXXXXXXXXXXX..',
     '.XXXXXXXXXXXXXX.',
-    '.XXXXXXXXXXXXXX.',
+    '.XLXXXXXXXXXXDX.',
     '.XXKKKXXXXKKKXX.',
     '.XXKKKXXXXKKKXX.',
     '.XXXXXXXXXXXXXX.',
     '..XXXXXKKXXXXX..',
     '..XXXXXXXXXXXX..',
     '...XXXXXXXXXX...',
-    '....XXXXXXXX....',
-    '.....X.XX.X.....',
+    '....XX.XX.XX....',
   ],
   // 9 恶魔
   [
     '.XX..........XX.',
-    '.XXX........XXX.',
-    '..XXX......XXX..',
+    '.XDX........XDX.',
+    '..XDX......XDX..',
     '..XXXXXXXXXXXX..',
     '.XXXXXXXXXXXXXX.',
-    '.XXXXXXXXXXXXXX.',
+    '.XLXXXXXXXXXXDX.',
     '.XXKKXXXXXXKKXX.',
     '.XXXXXXXXXXXXXX.',
     '..XXXXXXXXXXXX..',
-    '...XXXXXXXXXX...',
-    '...XWXX..XXWX...',
-    '....XX....XX....',
+    '..XXXKKKKKKXXX..',
+    '..XXWWXXXXWWXX..',
+    '...XX......XX...',
   ],
   // 10 独眼怪
   [
@@ -147,10 +145,10 @@ const PATTERNS = [
     '...XXXXXXXXXX...',
     '..XXXXXXXXXXXX..',
     '.XXXXXXXXXXXXXX.',
-    '.XXXWWWWWWWWXXX.',
-    '.XXXWWKKKKWWXXX.',
-    '.XXXWWKKKKWWXXX.',
-    '.XXXWWWWWWWWXXX.',
+    '.XXWWWWWWWWWWXX.',
+    '.XXWWWWKKWWWWXX.',
+    '.XXWWWWKKWWWWXX.',
+    '.XXWWWWWWWWWWXX.',
     '.XXXXXXXXXXXXXX.',
     '..XXXXXXXXXXXX..',
     '.XX..XX..XX..XX.',
@@ -159,13 +157,13 @@ const PATTERNS = [
   [
     '.....XXXXXX.....',
     '...XXXXXXXXXX...',
-    '..XXWWXXXXWWXX..',
-    '.XXXWWXXXXWWXXX.',
+    '..XXWWXXXWWXXX..',
+    '.XXWWWWXXWWXXXX.',
     '.XXXXXXXXXXXXXX.',
-    '.XXXXXXXXXXXXXX.',
+    '.XLXXXXXXXXXXDX.',
     '....XXXXXXXX....',
-    '....XWXXXXWX....',
-    '....XXXXXXXX....',
+    '....XWWWWWWX....',
+    '....XWWWWWWX....',
     '....XXXXXXXX....',
   ],
   // 12 忍者
@@ -173,11 +171,11 @@ const PATTERNS = [
     '......XXXX......',
     '...XXXXXXXXXX...',
     '..XXXXXXXXXXXX..',
-    '..XXXRRXXRRXXX..',
-    '..XXKKXXXXKKXX..',
+    '..XXWWWWWWWWXX..',
+    '..XWWKXXXXKWWX..',
+    '..XXRRRRRRRRXX..',
     '..XXXXXXXXXXXX..',
-    '..XXXXXXXXXXXX..',
-    '..XXXWWWWWWXXX..',
+    '..XLXXXXXXXXDX..',
     '..XXXXXXXXXXXX..',
     '...XXXXXXXXXX...',
     '....XXXXXXXX....',
@@ -187,10 +185,19 @@ const PATTERNS = [
 export const AVATAR_COUNT = PATTERNS.length;
 export const AVATAR_COLORS = ['#e85050', '#ff9f43', '#ffd76e', '#5cbf60', '#4dd6c4', '#5c8dff', '#b57bee', '#f06292'];
 
+// 主色明暗两档（亮部/暗部），渲染 L/D 字符用
+function shade(hex, k) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = v => Math.max(0, Math.min(255, Math.round(v * k)));
+  return `rgb(${f((n >> 16) & 255)},${f((n >> 8) & 255)},${f(n & 255)})`;
+}
+
 // 字符 → 颜色映射（主色动态传入）
 function glyphColor(ch, main) {
   switch (ch) {
     case 'X': return main;
+    case 'L': return shade(main, 1.34);
+    case 'D': return shade(main, 0.62);
     case 'W': return '#f2ead8';
     case 'K': return '#1b1826';
     case 'R': return '#e04848';
@@ -212,13 +219,23 @@ export function drawAvatar(ctx, x, y, size, av, opts = {}) {
   const main = AVATAR_COLORS[(ci + AVATAR_COLORS.length) % AVATAR_COLORS.length];
   const rows = PATTERNS[pi];
   const px = size / 16;
+  const solid = (r, c) => r >= 0 && r < rows.length && c >= 0 && c < 16 && rows[r][c] !== '.';
   ctx.save();
-  // 底板
+  // 底板：暗底 + 底部落地阴影
   ctx.fillStyle = opts.bg || '#14102b';
   ctx.fillRect(x, y, size, size);
-  ctx.strokeStyle = opts.border || main;
-  ctx.lineWidth = Math.max(1, size / 24);
-  ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.fillRect(x, y + size * 0.74, size, size * 0.26);
+  // 自动外描边：空位且四邻有实体 → 深色，勾出贴纸轮廓
+  ctx.fillStyle = '#0d0b18';
+  for (let r = 0; r < rows.length; r++) {
+    for (let c = 0; c < 16; c++) {
+      if (solid(r, c)) continue;
+      if (solid(r - 1, c) || solid(r + 1, c) || solid(r, c - 1) || solid(r, c + 1)) {
+        ctx.fillRect(x + c * px, y + r * px, px + 0.4, px + 0.4);
+      }
+    }
+  }
   // 图案
   rows.forEach((row, y2) => {
     for (let x2 = 0; x2 < row.length; x2++) {
@@ -228,6 +245,9 @@ export function drawAvatar(ctx, x, y, size, av, opts = {}) {
       ctx.fillRect(x + x2 * px, y + y2 * px, px + 0.4, px + 0.4);
     }
   });
+  ctx.strokeStyle = opts.border || main;
+  ctx.lineWidth = Math.max(1, size / 24);
+  ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
   ctx.restore();
 }
 
