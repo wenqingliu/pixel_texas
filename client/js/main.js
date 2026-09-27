@@ -481,6 +481,8 @@ const act = {
 };
 
 // ── 主循环 ──────────────────────────────────────────
+// 成牌名缓存：牌面没变不重复评估
+let _hnKey = '', _hnVal = null;
 // 实时胜率：牌面/人数变化时重算（本地蒙卡，600 次 ≈ 1ms）
 function updateWinRate() {
   const snap = S.snap;
@@ -522,10 +524,14 @@ function tick(now) {
       S.wrDisp = null;
       renderState.winRate = null;
     }
-    // 当前成牌名（3 张公共牌起）
-    renderState.handName = (S.winRate != null && S.snap && S.snap.hand && S.snap.hand.board.length >= 3 && S.myCards && S.myCards.length === 2)
-      ? scoreName(eval7([...S.myCards, ...S.snap.hand.board]))
-      : null;
+    // 当前成牌名（3 张公共牌起；牌面不变走缓存）
+    const canName = !!(S.winRate != null && S.snap && S.snap.hand && S.snap.hand.board.length >= 3 && S.myCards && S.myCards.length === 2);
+    const hnKey = canName ? S.myCards.join(',') + '|' + S.snap.hand.board.join(',') : '';
+    if (hnKey !== _hnKey) {
+      _hnKey = hnKey;
+      _hnVal = canName ? scoreName(eval7([...S.myCards, ...S.snap.hand.board])) : null;
+    }
+    renderState.handName = _hnVal;
     if (S.prompt && S.prompt.deadline) {
       // 服务器 deadline 是纪元毫秒，用 Date.now() 求真实剩余
       renderState.total = ((S.snap && S.snap.settings.actionTime) || 30) * 1000;

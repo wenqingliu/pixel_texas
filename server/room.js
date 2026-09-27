@@ -343,6 +343,7 @@ export class Room {
       } else {
         // 真人：先等"行动节奏"(等下注筹码飞行动画播完 + 0.2s 最小停顿)，
         // 再开 prompt 与倒计时窗口。期间 _armHumanTimeout 不会被触发，actorDeadline = 0(广播显示无人倒计时)
+        // (TIMING.ACTION_TIME / 30000) 比例因子：测试把 ACTION_TIME 调小后同步缩短人类时限，勿删
         const at = Math.max(5, this.settings.actionTime || 30) * 1000 * (TIMING.ACTION_TIME / 30000);
         this.addTimer(() => {
           if (this.closed || !this.hand || this.hand.phase !== 'betting' || this.hand.awaitingSeat() !== p.seat) return;
