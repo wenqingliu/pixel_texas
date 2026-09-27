@@ -166,6 +166,9 @@ export function drawRoomLobby(ctx, S, act) {
     drawPixelText(ctx, '▸ 房间设置（房主）', px, py, 15, '#f4efe3');
     const botsFill = checkbox(ctx, 'botsFill', px, py + 26, '机器人自动补位', st.botsFill);
     if (botsFill !== st.botsFill) act.updateSettings({ botsFill });
+    // 断线托管：掉线玩家的手牌由 AI 普通档代打，重连自动交还
+    const aiStandIn = checkbox(ctx, 'aiStandIn', px + 290, py + 26, '断线托管（AI 代打）', st.aiStandIn);
+    if (aiStandIn !== st.aiStandIn) act.updateSettings({ aiStandIn });
     const lv = cycle(ctx, 'botLevel', px, py + 56, 260, '机器人水平', ['休闲', '普通', '大师'], ['easy', 'normal', 'hard'].indexOf(st.botLevel));
     if (lv !== ['easy', 'normal', 'hard'].indexOf(st.botLevel)) act.updateSettings({ botLevel: ['easy', 'normal', 'hard'][lv] });
     const seats = cycle(ctx, 'maxSeats', px + 290, py + 56, 220, '人数上限', ['2', '3', '4', '5', '6', '7', '8', '9'], st.maxSeats - 2);

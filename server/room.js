@@ -3,7 +3,7 @@ import { Hand } from './hand.js';
 import { scoreName, eval7 } from './evaluator.js';
 import { botDecide, BOT_NAMES, LEVEL_NAMES } from './bots/bot.js';
 
-export const DEFAULT_SETTINGS = { maxSeats: 6, sb: 10, bb: 20, buyIn: 2000, botsFill: true, botLevel: 'normal', mode: 'cash', blindsEvery: 8, actionTime: 30, breakWait: 8 };
+export const DEFAULT_SETTINGS = { maxSeats: 6, sb: 10, bb: 20, buyIn: 2000, botsFill: true, botLevel: 'normal', mode: 'cash', blindsEvery: 8, actionTime: 30, breakWait: 8, aiStandIn: false };
 export const BUYIN_OPTIONS = [1000, 2000, 5000, 10000];
 export const BLIND_OPTIONS = [
   { sb: 5, bb: 10 }, { sb: 10, bb: 20 }, { sb: 25, bb: 50 }, { sb: 50, bb: 100 },
@@ -348,6 +348,19 @@ export class Room {
         const delay = t0 + Math.random() * (t1 - t0);
         this.addTimer(() => this._botAct(p), delay);
       } else {
+        // 断线托管开启且该玩家掉线：AI 以普通档代打本手，重连后自动交还
+        const pl2 = this.players.get(p.token);
+        if (this.settings.aiStandIn && pl2 && !pl2.connected) {
+          const [t0, t1] = TIMING.BOT_THINK;
+          this.addTimer(() => {
+            if (this.closed || !this.hand || this.hand.phase !== 'betting' || this.hand.awaitingSeat() !== p.seat) return;
+            // 即使延迟期间重连也由 AI 打完这一手，避免无人行动卡局；下一个行动窗口交还真人
+            const d2 = botDecide(p, this.hand, this.stats);
+            const res2 = this.hand.applyAction(p.seat, d2.type, d2.amount);
+            if (!res2.ok) this.hand.autoAction(p.seat);
+          }, t0 + Math.random() * (t1 - t0));
+          return;
+        }
         // 真人：先等"行动节奏"(等下注筹码飞行动画播完 + 0.2s 最小停顿)，
         // 再开 prompt 与倒计时窗口。期间 _armHumanTimeout 不会被触发，actorDeadline = 0(广播显示无人倒计时)
         // (TIMING.ACTION_TIME / 30000) 比例因子：测试把 ACTION_TIME 调小后同步缩短人类时限，勿删
@@ -628,7 +641,7 @@ export class Room {
   updateSettings(token, patch) {
     if (token !== this.hostToken) return { ok: false, err: 'not_host' };
     const prevMode = this.settings.mode;
-    const allowed = ['maxSeats', 'sb', 'bb', 'buyIn', 'botsFill', 'botLevel', 'mode', 'blindsEvery', 'actionTime', 'breakWait'];
+    const allowed = ['maxSeats', 'sb', 'bb', 'buyIn', 'botsFill', 'botLevel', 'mode', 'blindsEvery', 'actionTime', 'breakWait', 'aiStandIn'];
     for (const k of allowed) {
       if (k in patch) this.settings[k] = patch[k];
     }
@@ -639,6 +652,7 @@ export class Room {
     this.settings.blindsEvery = Math.max(2, Math.min(20, this.settings.blindsEvery | 0 || 8));
     this.settings.actionTime = Math.max(10, Math.min(90, this.settings.actionTime | 0 || 30));
     this.settings.breakWait = Math.max(0, Math.min(30, this.settings.breakWait | 0)); // 局间休息秒数，0 = 关
+    this.settings.aiStandIn = !!this.settings.aiStandIn; // 断线托管（AI 代打）
     if (!LEVEL_NAMES[this.settings.botLevel]) this.settings.botLevel = 'normal';
     // 盲注/买入：必须是有限数值，非法值回落默认（NaN 会污染整手牌的筹码守恒）
     const intOr = (v, dflt) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? n : dflt; };
