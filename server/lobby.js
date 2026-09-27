@@ -1,7 +1,7 @@
 // 大厅：房间注册、快速匹配、房间码、房间列表广播、个人档案
 import crypto from 'node:crypto';
 import { Room, DEFAULT_SETTINGS } from './room.js';
-import { load, saveSoon } from './storage.js';
+import { load, saveSoon, saveNow } from './storage.js';
 
 const CODE_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 
@@ -300,7 +300,7 @@ export class Lobby {
   }
 
   shutdown() {
-    saveSoon('profiles', this.profiles, 0);
+    saveNow('profiles', this.profiles); // 同步落盘：退出路径上防抖定时器不会再触发
     for (const r of this.rooms.values()) r.close();
     for (const p of this.tokens.values()) {
       if (p.ws && p.ws.readyState === 1) p.ws.close();

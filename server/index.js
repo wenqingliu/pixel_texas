@@ -209,6 +209,18 @@ const heartbeat = setInterval(() => {
 }, 15000);
 wss.on('close', () => clearInterval(heartbeat));
 
+// Ctrl+C / kill 前把防抖中的档案写入同步落盘
+let exiting = false;
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    if (exiting) { process.exit(1); } // 二次信号强制退出
+    exiting = true;
+    console.log('\n正在保存档案并退出…');
+    lobby.shutdown();
+    process.exit(0);
+  });
+}
+
 server.listen(PORT, () => {
   console.log('╔══════════════════════════════════════════╗');
   console.log('║   PIXEL TEXAS · 像素德州扑克  已启动      ║');
