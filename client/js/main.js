@@ -479,14 +479,14 @@ const act = {
   openProfile: () => { S.panel = 'profile'; S.avatarDraft = null; net.send({ t: 'get_profile' }); },
   closePanel: () => { S.panel = null; S.replay = null; S.avatarDraft = null; syncDomMode('name'); },
   openRooms: () => { S.panel = 'rooms'; syncDomMode('join'); },
-  setAvatarDraft: (av) => { S.avatarDraft = av; },
+  // 选头像即生效：立即更新大厅显示、落盘并上行（不再需要点保存）
+  setAvatarDraft: (av) => {
+    S.avatarDraft = av;
+    S.avatar = av;
+    localStorage.setItem('pt_avatar', av);
+    net.send({ t: 'set_avatar', avatar: av });
+  },
   saveProfile: () => {
-    if (S.avatarDraft) {
-      S.avatar = S.avatarDraft;
-      localStorage.setItem('pt_avatar', S.avatar);
-      net.send({ t: 'set_avatar', avatar: S.avatar });
-      S.avatarDraft = null;
-    }
     if (S.nameInput) net.setName(S.nameInput);
     toast('已保存');
     net.send({ t: 'get_profile' });
