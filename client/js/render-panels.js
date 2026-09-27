@@ -264,9 +264,13 @@ function drawReplayPanel(ctx, S, act) {
   if (button(ctx, 'rpPrev', f.x + 20, cy, 60, 28, '◀', { size: 13 })) act.replaySeek(rp.i - 1);
   if (button(ctx, 'rpNext', f.x + 88, cy, 60, 28, '▶', { size: 13 })) act.replaySeek(rp.i + 1);
   if (button(ctx, 'rpAuto', f.x + 156, cy, 90, 28, rp.auto ? '暂停' : '自动', { size: 13 })) act.replayToggleAuto();
-  drawPixelText(ctx, `${Math.min(rp.i + 1, steps.length)}/${steps.length}`, f.x + 260, cy + 7, 13, '#9a92c2');
+  // 倍速（自动播放节奏 0.5/1/2/4）
+  const spdVals = [0.5, 1, 2, 4];
+  const sc = cycle(ctx, 'rpSpeed', f.x + 256, cy, 116, '', ['0.5×', '1×', '2×', '4×'], Math.max(0, spdVals.indexOf(rp.speed || 1)));
+  act.replaySetSpeed(spdVals[sc]);
+  drawPixelText(ctx, `${Math.min(rp.i + 1, steps.length)}/${steps.length}`, f.x + 386, cy + 7, 13, '#9a92c2');
   // 进度滑条
-  const sv = slider(ctx, 'rpSeek', f.x + 320, cy + 6, f.w - 350, rp.i, 0, steps.length - 1, { integer: true });
+  const sv = slider(ctx, 'rpSeek', f.x + 446, cy + 6, f.w - 476, rp.i, 0, steps.length - 1, { integer: true });
   if (sv !== rp.i) act.replaySeek(sv);
 }
 

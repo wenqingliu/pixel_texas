@@ -83,6 +83,14 @@ window.addEventListener('pointerup', () => {
 });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
+// 回放面板键盘导航（←/→ 步进，空格 播放/暂停）
+window.addEventListener('keydown', (e) => {
+  if (S.panel !== 'replay' || !S.replay) return;
+  if (e.key === 'ArrowLeft') act.replaySeek(S.replay.i - 1);
+  else if (e.key === 'ArrowRight') act.replaySeek(S.replay.i + 1);
+  else if (e.key === ' ') { e.preventDefault(); act.replayToggleAuto(); }
+});
+
 // DOM 输入框定位（逻辑坐标 → stage 内绝对定位）
 function updateDomInput() {
   // 输入框只在菜单/个人中心出现；牌桌与连接遮罩时隐藏
@@ -465,7 +473,7 @@ const act = {
   emote: (e) => net.send({ t: 'emote', emoji: e }),
   rabbit: () => net.send({ t: 'rabbit' }),
   openReplay: (rec) => {
-    S.replay = { rec, steps: buildTimeline(rec), i: 0, auto: false, lastAdvance: 0 };
+    S.replay = { rec, steps: buildTimeline(rec), i: 0, auto: false, lastAdvance: 0, speed: 1 };
     S.panel = 'replay';
   },
   replaySeek: (i) => {
@@ -477,6 +485,7 @@ const act = {
     S.replay.auto = !S.replay.auto;
     S.replay.lastAdvance = performance.now();
   },
+  replaySetSpeed: (v) => { if (S.replay) S.replay.speed = v; },
   copyCode: (code) => {
     const done = () => toast('房间码已复制：' + code);
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -546,8 +555,8 @@ function tick(now) {
       renderState.remain = 0;
     }
 
-    // 回放自动播放
-    if (S.replay && S.replay.auto && now - S.replay.lastAdvance > 900) {
+    // 回放自动播放（speed: 0.5/1/2/4 倍速）
+    if (S.replay && S.replay.auto && now - S.replay.lastAdvance > 900 / (S.replay.speed || 1)) {
       S.replay.lastAdvance = now;
       if (S.replay.i < S.replay.steps.length - 1) S.replay.i++;
       else S.replay.auto = false;
