@@ -7,6 +7,7 @@ import { Music } from './music.js';
 import { equity, eval7, scoreName } from './equity.js';
 import { defaultAvatar, validAvatar } from './avatar.js';
 import { setThemeId } from './theme.js';
+import { ACHIEVEMENTS } from '../../shared/achievements.js';
 
 const W = 960, H = 540;
 const canvas = document.getElementById('game');
@@ -356,6 +357,14 @@ function handleEv(ev) {
     case 'emote':
       notifyEmote(ev.seat, ev.emoji);
       break;
+    case 'achievement': {
+      const a = ACHIEVEMENTS.find(x => x.id === ev.id);
+      toast(`${ev.name} 解锁成就「${a ? a.name : ev.id}」`);
+      const wp = seatPos(ev.seat);
+      if (wp) confetti(wp.x, wp.y, 24);
+      sfx.win();
+      break;
+    }
     case 'rabbit':
       seqPush(() => { notifyRabbit(ev.cards); sfx.street(); }, 500);
       break;

@@ -375,11 +375,17 @@ export class Room {
     } else if (ev.kind === 'action') {
       this.actorDeadline = 0; // 行动已完成，关闭当前行动窗口（旧超时计时器随之失效）
     } else if (ev.kind === 'hand_stats') {
-      // 全局个人档案（按 token）；补上最佳牌型中文名
+      // 全局个人档案（按 token）；补上最佳牌型中文名；成就解锁广播全桌
       for (const d of ev.players) {
         if (d.token && !d.isBot) {
           if (d.bestScore) d.bestHand = scoreName(d.bestScore);
-          this.lobby.recordPlayerStats(d.token, d);
+          const unlocked = this.lobby.recordPlayerStats(d.token, d, this.hand.bb);
+          if (unlocked.length) {
+            const p2 = this.hand.bySeat(d.seat);
+            for (const id of unlocked) {
+              this.broadcast({ t: 'ev', kind: 'achievement', seat: p2 ? p2.seat : -1, name: p2 ? p2.name : '', id });
+            }
+          }
         }
       }
       // 房间内画像（名字维度，含机器人）：大师档据此针对性决策

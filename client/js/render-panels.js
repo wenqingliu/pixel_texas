@@ -5,6 +5,7 @@ import { drawPixelText, ease } from './fx.js';
 import { getTheme } from './theme.js';
 import { drawAvatar, AVATAR_COUNT, AVATAR_COLORS, defaultAvatar } from './avatar.js';
 import { W, H } from './render-core.js';
+import { ACHIEVEMENTS } from '../../shared/achievements.js';
 
 function panelFrame(ctx, title, w, h) {
   const th = getTheme();
@@ -32,7 +33,7 @@ export function drawPanels(ctx, S, act) {
 
 // ── 个人中心 ────────────────────────────────────────
 function drawProfilePanel(ctx, S, act) {
-  const f = panelFrame(ctx, '个人中心', 660, 430);
+  const f = panelFrame(ctx, '个人中心', 660, 490);
   if (!f) { act.closePanel(); return; }
   const p = S.profile || { name: S.nameInput, avatar: S.avatar, hands: 0 };
   const av = S.avatarDraft != null ? S.avatarDraft : (p.avatar || S.avatar || defaultAvatar(p.name));
@@ -128,6 +129,27 @@ function drawProfilePanel(ctx, S, act) {
     }
   }
   drawPixelText(ctx, '统计跨房间累计 · 每 20 局解锁风格分析', f.x + 130, f.y + f.h - 26, 11, '#8b85ad');
+
+  // 成就墙：解锁亮起，未解锁灰显
+  const got = new Set((S.profile && S.profile.achievements) || []);
+  const ay = f.y + 408;
+  drawPixelText(ctx, '成就', f.x + 24, ay + 14, 12, '#ffd76e');
+  ACHIEVEMENTS.forEach((a, i) => {
+    const bx = f.x + 78 + i * 54, by = ay;
+    const has = got.has(a.id);
+    ctx.fillStyle = has ? 'rgba(255, 215, 110, 0.16)' : 'rgba(20, 16, 43, 0.9)';
+    ctx.fillRect(bx, by, 46, 40);
+    ctx.strokeStyle = has ? '#ffd76e' : '#3a3560';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx + 0.5, by + 0.5, 45, 39);
+    ctx.font = '18px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = has ? 1 : 0.25;
+    ctx.fillText(a.icon, bx + 23, by + 13);
+    ctx.globalAlpha = 1;
+    drawPixelText(ctx, a.name.slice(0, 4), bx + 23, by + 28, 9, has ? '#f4efe3' : '#8b85ad', 'center');
+  });
 }
 
 function inRectHover(x, y, w, h) {

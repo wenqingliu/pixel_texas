@@ -2,6 +2,7 @@
 import crypto from 'node:crypto';
 import { Room, DEFAULT_SETTINGS } from './room.js';
 import { load, saveSoon, saveNow } from './storage.js';
+import { newlyUnlocked } from '../shared/achievements.js';
 
 const CODE_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 
@@ -43,7 +44,8 @@ export class Lobby {
   }
 
   // hand_stats → 个人档案（按 token，跨房间累计）
-  recordPlayerStats(token, d) {
+  // 每手数据入档：返回新解锁的成就 id 列表
+  recordPlayerStats(token, d, bb) {
     const p = this.profileOf(token);
     const st = p.stats;
     st.hands++;
@@ -63,11 +65,19 @@ export class Lobby {
     }
     if (d.facedBet) st.faced++;
     if (d.foldedFacingBet) st.foldedFaced++;
+    // 超紧岩石连击计数
+    if (!d.vpip) st.foldStreak = (st.foldStreak || 0) + 1;
+    else st.foldStreak = 0;
     // 近 40 手净盈亏（个人中心趋势条用）
     st.recent = st.recent || [];
     st.recent.push(d.net || 0);
     if (st.recent.length > 40) st.recent.shift();
+    // 成就判定（返回新解锁 id，由房间广播）
+    if (!p.achievements) p.achievements = {};
+    const unlocked = newlyUnlocked(p.achievements, d, st, bb);
+    for (const id of unlocked) p.achievements[id] = Date.now();
     saveSoon('profiles', this.profiles);
+    return unlocked;
   }
 
   setAvatar(token, avatar) {
@@ -105,6 +115,7 @@ export class Lobby {
       bestHand: st.bestHand || '',
       foldToBet: pc(st.foldedFaced, st.faced),        // 面对下注弃牌率
       recent: (st.recent || []).slice(-40),           // 近若干手净盈亏
+      achievements: Object.keys(p.achievements || {}),
       style: styleLabel(st),
     };
   }

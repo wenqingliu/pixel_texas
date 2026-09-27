@@ -134,5 +134,24 @@ function assert(cond, msg) {
   assert(load('probe', 'def') === 'def', '两份全损坏返回默认值');
 }
 
+// ── 成就：解锁判定 + 连击计数 ────────────────────────
+{
+  const lobby3 = new Lobby();
+  const tokenA = lobby3.login(new FakeWS(), '成就侠', null);
+  const royal = (8 << 20) | (12 << 16);
+  let unlocked = lobby3.recordPlayerStats(tokenA, { won: false, net: 0, vpip: true, pfr: true, aggr: 1, calls: 0, showdown: true, bestScore: royal });
+  assert(unlocked.includes('first_hand') && unlocked.includes('royal_flush'), `首手 + 皇家解锁（${unlocked.join(',')}）`);
+  unlocked = lobby3.recordPlayerStats(tokenA, { won: false, net: 0, vpip: true, pfr: false, aggr: 0, calls: 0, showdown: false, bestScore: royal });
+  assert(unlocked.length === 0, '已解锁不重复');
+  // 连续 10 手未主动入池 → 超紧岩石
+  for (let i = 0; i < 9; i++) {
+    lobby3.recordPlayerStats(tokenA, { won: false, net: 0, vpip: false, pfr: false, aggr: 0, calls: 0, showdown: false });
+  }
+  unlocked = lobby3.recordPlayerStats(tokenA, { won: false, net: 0, vpip: false, pfr: false, aggr: 0, calls: 0, showdown: false });
+  assert(unlocked.includes('rock'), '连续 10 手未入池解锁超紧岩石');
+  const view = lobby3.profileView(tokenA);
+  assert(Array.isArray(view.achievements) && view.achievements.length >= 3, 'profileView 带成就列表');
+}
+
 console.log(fails === 0 ? 'lobby 校验全部通过 ✓' : `lobby 校验有 ${fails} 项失败 ✗`);
 process.exit(fails === 0 ? 0 : 1);
