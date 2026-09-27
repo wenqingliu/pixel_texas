@@ -94,16 +94,22 @@ export function botDecide(p, hand, reads = null) {
   const stackBB = p.chips / bb;
   const r = Math.random();
 
-  // 对手画像：可样本对手（≥8 手）的平均 VPIP / 激进度
-  let oppN = 0, oppVpipSum = 0;
+  // 对手画像：可样本对手（≥8 手）的平均 VPIP / 翻牌激进度 / 摊牌记忆
+  let oppN = 0, oppVpipSum = 0, oppFlopAggroSum = 0, respectRaise = false;
   if (reads) {
     for (const q of hand.alive()) {
       if (q === p) continue;
       const rd = reads.get(q.name);
-      if (rd && rd.hands >= 8) { oppN++; oppVpipSum += rd.vpip / rd.hands; }
+      if (!rd || rd.hands < 8) continue;
+      oppN++;
+      oppVpipSum += rd.vpip / rd.hands;
+      if (rd.aggrStreet) oppFlopAggroSum += (rd.aggrStreet.flop || 0) / rd.hands;
+      // 30 手内摊出过两对以上的对手，其加注更可信
+      if (rd.shownCat >= 4 && hand.handNo - (rd.shownAt || 0) < 30) respectRaise = true;
     }
   }
   const oppVpip = oppN > 0 ? oppVpipSum / oppN : 0.32;
+  const oppFlopAggro = oppN > 0 ? oppFlopAggroSum / oppN : 0;
   const oppStation = oppN > 0 && oppVpip > 0.55;  // 跟注站：诈唬几乎打不走
   const oppLoose = oppN > 0 && oppVpip > 0.45;    // 松：可以多诈
   const oppTight = oppN > 0 && oppVpip < 0.25;    // 紧：少诈、多偷
@@ -182,8 +188,10 @@ export function botDecide(p, hand, reads = null) {
     // 价值下注
     if (edge > 2.4 && r < 0.8) return raiseTo(Math.max(bb * 3, pot * (eq > 0.85 && r < 0.4 ? 0.5 : 0.75))); // 大牌偶尔慢打半池
     if (edge > 1.6 && r < 0.72) return raiseTo(Math.max(bb * 2.5, pot * 0.66));
-    // 半诈唬 / 诈唬：少人池 + 干燥牌面更容易成功；对着跟注站大幅收敛
-    const bluffFreq = (wet < 0.35 ? 0.2 : 0.1) * (multiway ? 0.4 : 1) * bluffMod;
+    // 半诈唬 / 诈唬：少人池 + 干燥牌面更容易成功；对着跟注站大幅收敛；
+    // 持 A 阻断坚果同花时更敢在花面上开火
+    const hasNutBlocker = wet >= 0.35 && p.cards.some(c => (c >> 2) === 12);
+    const bluffFreq = (wet < 0.35 ? 0.2 : 0.1) * (multiway ? 0.4 : 1) * bluffMod * (hasNutBlocker ? 1.5 : 1);
     if (edge < 1.1 && r < bluffFreq) return raiseTo(Math.max(bb * 2.5, pot * 0.6));
     if (eq > 0.42 && eq < 0.55 && r < 0.5 * bluffMod && !multiway) return raiseTo(Math.max(bb * 2.5, pot * 0.55)); // 半诈唬
     return { type: 'check' };
@@ -191,9 +199,10 @@ export function botDecide(p, hand, reads = null) {
 
   // 面对下注
   if (edge > 2.3 && r < 0.55) return raiseTo(Math.max(o.minRaiseTo, pot * 0.8)); // 强牌再加注
-  // 底池赔率（大师加一点隐含赔率余量）
-  const implied = wet > 0.5 && eq > 0.35 && eq < 0.55 ? 0.85 : 1.05; // 听牌给隐含赔率
-  if (edge > 1 + potOdds * implied) {
+  // 底池赔率（大师加一点隐含赔率余量）；对翻牌激进的对手跟注门槛放宽，近期亮过牌的对手加注更可信
+  const implied = wet > 0.5 && eq > 0.35 && eq < 0.55 ? 0.85 : 1.05;
+  const flopWiden = street === 'flop' && oppFlopAggro > 1.8 ? 0.92 : 1;
+  if (edge > 1 + potOdds * implied * flopWiden * (respectRaise ? 1.08 : 1)) {
     if (r < 0.12 && eq > 0.6 && o.canRaise) return raiseTo(Math.max(o.minRaiseTo, pot * 0.6)); // 偶尔加注保护
     return { type: 'call' };
   }

@@ -45,6 +45,7 @@ export class Hand {
       p.vpip = false;       // 翻牌前主动投钱
       p.pfr = false;        // 翻牌前加注
       p.aggr = 0;           // 下注+加注次数
+      p.aggrStreet = { preflop: 0, flop: 0, turn: 0, river: 0 }; // 分街激进度（画像用）
       p.calls = 0;          // 跟注次数
       p.showdown = false;   // 见摊牌
       p.facedBet = false;        // 本手曾面对下注（被注）
@@ -183,6 +184,7 @@ export class Hand {
       const isFullRaise = raiseTo >= this.currentBet + this.minIncrement || this.currentBet === 0;
       ev.put = raiseTo - p.streetCommit; // 本次净投入（回放流水）
       p.aggr++;
+      p.aggrStreet[this.street]++;
       if (this.street === 'preflop') { p.vpip = true; p.pfr = true; }
       this._commit(p, raiseTo - p.streetCommit);
       const wentAllIn = p.chips === 0;
@@ -303,6 +305,7 @@ export class Hand {
           seat: p.seat, token: p.token || null, isBot: !!p.isBot,
           net: p.lastDelta || 0, won: (p.lastDelta || 0) > 0,
           vpip: p.vpip, pfr: p.pfr, aggr: p.aggr, calls: p.calls,
+          aggrStreet: { ...p.aggrStreet },
           showdown: p.showdown, bestScore,
           facedBet: !!p.facedBet, foldedFacingBet: !!p.foldedFacingBet,
         };
@@ -389,7 +392,8 @@ export class Hand {
     for (const [seat, win] of results) {
       const p = this.bySeat(seat);
       p.chips += win;
-      resArr.push({ seat, win, name: scoreName(eval7([...p.cards, ...this.board])), best5: best5of7([...p.cards, ...this.board]).cards });
+      const sc = eval7([...p.cards, ...this.board]);
+      resArr.push({ seat, win, name: scoreName(sc), score: sc, best5: best5of7([...p.cards, ...this.board]).cards });
     }
     // 全员净盈亏（战绩与展示用）
     for (const p of this.players) {

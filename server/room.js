@@ -396,6 +396,10 @@ export class Room {
         if (d.vpip) st.vpip++;
         st.aggr += d.aggr || 0;
         st.calls += d.calls || 0;
+        if (d.aggrStreet) {
+          st.aggrStreet = st.aggrStreet || { preflop: 0, flop: 0, turn: 0, river: 0 };
+          for (const k in d.aggrStreet) st.aggrStreet[k] += d.aggrStreet[k];
+        }
         this.stats.set(p2.name, st);
       }
     } else if (ev.kind === 'showdown') {
@@ -412,6 +416,13 @@ export class Room {
         st.net += (p.lastDelta || 0);
         if (ev.results.some(r => r.seat === p.seat)) st.wins++;
         this.stats.set(p.name, st);
+      }
+      // 摊牌记忆：赢家亮过的成牌等级（机器人 30 手内更尊重其加注）
+      for (const r of ev.results) {
+        const w2 = this.hand.bySeat(r.seat);
+        if (!w2 || r.score == null) continue;
+        const st2 = this.stats.get(w2.name);
+        if (st2) { st2.shownCat = r.score >> 20; st2.shownAt = this.handNo; }
       }
       // 手牌流水归档（回放用）
       if (this._rec) {
