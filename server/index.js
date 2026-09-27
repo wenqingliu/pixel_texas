@@ -186,6 +186,10 @@ wss.on('connection', (ws) => {
           room.readyNext(token);
           return;
         }
+        case 'runout_fast': {
+          room.fastRunout(token);
+          return;
+        }
         case 'take_seat': {
           const r = room.trySit(token);
           if (r === false) lobby.sendTo(token, { t: 'error', msg: '暂时没有空位（满员且无可顶替的机器人）' });

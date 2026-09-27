@@ -50,6 +50,7 @@ export class Room {
     this._lastSyncAt = 0;
     this.breakDeadline = 0;     // 两局之间休息倒计时截止（0 = 不在休息期）
     this.breakReady = new Set(); // 已点「继续」的参战真人 token
+    this.runoutFast = false;    // 全下跑牌加速（任意玩家可触发）
 
     // 锦标赛 / 回放 / 战绩状态
     this.handLog = [];          // 最近手牌流水（回放用）
@@ -270,6 +271,7 @@ export class Room {
   startHand() {
     this.rabbitState = null;
     this.breakDeadline = 0;
+    this.runoutFast = false;
     if (this.closed || this.phase !== 'playing') return;
     if (this.hand && this.hand.phase !== 'done') return;
     this.cleanupAfterHand();
@@ -435,12 +437,18 @@ export class Room {
     if (!res.ok) hand.autoAction(p.seat); // 决策异常时托管兜底
   }
 
+  // 全下跑牌加速：任何在场玩家都可触发，剩余公共牌按 1/4 间隔快发
+  fastRunout() {
+    if (this.hand && this.hand.phase === 'runout') this.runoutFast = true;
+    return { ok: true };
+  }
+
   _runoutStep() {
     if (this.closed) return;
     const hand = this.hand;
     if (!hand || hand.phase !== 'runout') return;
     hand.advanceRunout();
-    if (hand.phase === 'runout') this.addTimer(() => this._runoutStep(), TIMING.RUNOUT_STEP);
+    if (hand.phase === 'runout') this.addTimer(() => this._runoutStep(), this.runoutFast ? 320 : TIMING.RUNOUT_STEP);
   }
 
   _afterHand() {

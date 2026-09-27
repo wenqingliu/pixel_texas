@@ -469,6 +469,8 @@ const act = {
   sitIn: () => net.send({ t: 'sit_in' }),
   // 休息倒计时中点「继续」：全员就绪提前开局
   readyNext: () => { S.breakReadySelf = true; net.send({ t: 'ready_next' }); },
+  // 全下跑牌加速
+  runoutFast: () => net.send({ t: 'runout_fast' }),
   quickTournament: () => net.send({ t: 'quick_tournament' }),
   emote: (e) => net.send({ t: 'emote', emoji: e }),
   rabbit: () => net.send({ t: 'rabbit' }),

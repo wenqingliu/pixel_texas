@@ -291,6 +291,11 @@ export function drawTable(ctx, S, act) {
     drawTournamentOver(ctx, snap, act);
   }
 
+  // 全下跑牌：加速按钮（快进剩余公共牌）
+  if (hand && hand.phase === 'runout') {
+    if (textButton(ctx, 'runoutFast', 452, 280, 13, '加速 ▸▸', th.gold)) act.runoutFast();
+  }
+
   // 等待下一局：休息倒计时面板（继续 / 兔猎 / 退出）
   if (!hand && snap.phase === 'playing' && !snap.tournamentOver) {
     if (snap.break) {
