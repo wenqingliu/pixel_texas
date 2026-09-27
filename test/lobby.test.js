@@ -73,5 +73,39 @@ function assert(cond, msg) {
   assert(t2 !== 'deadbeef', '无档案的旧 token 换发新 token');
 }
 
+// ── 两局之间：休息倒计时 + 全员就绪提前开局 ──────────
+{
+  const fakeLobby = {
+    onRoomsChanged() {}, sendTo() {}, removeRoom() {},
+    profileOf: () => ({ stats: { hands: 0, vpip: 0 } }),
+  };
+  const room = new Room(fakeLobby, 'TST2', 'host');
+  room.addPlayer('host', '房主', '');
+  room.settings.botsFill = true;
+  room.phase = 'playing';
+  room.trySit('host');
+  room.fillBots();
+  assert(room.eligibleSeats().length >= 2, '参战座位就绪');
+
+  room.startBreak();
+  assert(room.breakDeadline > Date.now(), '进入休息倒计时');
+  const snap = room.snapshot('host');
+  assert(snap.break && snap.break.need === 1 && snap.break.deadline > Date.now(), '快照带倒计时与就绪需求');
+
+  // 倒计时期间 sitIn/rebuy 触发的自动开局不得抢跑
+  room.maybeAutoNext();
+  assert(room.breakDeadline > 0 && !room.hand, '倒计时期间不被自动开局');
+
+  // 非参战/陌生 token 点继续无效
+  room.readyNext('nobody');
+  assert(room.breakDeadline > 0 && !room.hand, '陌生 token 不推进就绪');
+
+  // 唯一参战真人就绪 → 立即开局
+  const r = room.readyNext('host');
+  assert(r.ok && room.hand && room.breakDeadline === 0, '全员就绪提前开局');
+  room.close();
+  assert(room.closed, '房间关闭清理计时器');
+}
+
 console.log(fails === 0 ? 'lobby 校验全部通过 ✓' : `lobby 校验有 ${fails} 项失败 ✗`);
 process.exit(fails === 0 ? 0 : 1);

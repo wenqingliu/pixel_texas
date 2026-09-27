@@ -21,6 +21,7 @@ const S = {
   rooms: [],
   prompt: null,         // {options, deadline}
   myCards: null,
+  breakReadySelf: false, // 休息倒计时中已点「继续」（本地标记，不上行）
   volume: FX.volume,
   musicVol: Music.volume,
   track: Music.trackId,
@@ -152,6 +153,7 @@ function onMsg(m) {
       const prevPhase = S.snap && S.snap.phase;
       S.snap = m;
       S.screen = 'room';
+      if (!m.break) S.breakReadySelf = false;
       if (m.handNo && m.handNo !== lastHandNo) {
         lastHandNo = m.handNo;
         seqClear();
@@ -235,6 +237,7 @@ function handleEv(ev) {
       S.prompt = null;
       S.myCards = null;
       S.preAction = null; // 新手牌清空上一手可能遗留的预操作
+      S.breakReadySelf = false;
       lastHandNo = ev.handNo;
       seqPush(() => { resetHandAnim(); clearBets(); notifyDeal(); sfx.deal(); }, 0);
       break;
@@ -456,6 +459,8 @@ const act = {
   },
   sitOut: () => net.send({ t: 'sit_out' }),
   sitIn: () => net.send({ t: 'sit_in' }),
+  // 休息倒计时中点「继续」：全员就绪提前开局
+  readyNext: () => { S.breakReadySelf = true; net.send({ t: 'ready_next' }); },
   quickTournament: () => net.send({ t: 'quick_tournament' }),
   emote: (e) => net.send({ t: 'emote', emoji: e }),
   rabbit: () => net.send({ t: 'rabbit' }),

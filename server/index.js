@@ -170,6 +170,11 @@ wss.on('connection', (ws) => {
           if (!res.ok) lobby.sendTo(token, { t: 'error', msg: '现在不能回到牌局' });
           return;
         }
+        case 'ready_next': {
+          // 两局之间点「继续」：全员就绪提前开局；不在休息期则静默忽略
+          room.readyNext(token);
+          return;
+        }
         case 'take_seat': {
           const r = room.trySit(token);
           if (r === false) lobby.sendTo(token, { t: 'error', msg: '暂时没有空位（满员且无可顶替的机器人）' });

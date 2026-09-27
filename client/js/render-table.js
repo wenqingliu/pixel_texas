@@ -216,10 +216,7 @@ export function drawTable(ctx, S, act) {
     return;
   }
 
-  // 兔猎按钮（无人跟注后可看剩余公牌）
-  if (snap.rabbitAvail && !hand) {
-    if (button(ctx, 'rabbit', 410, 318, 140, 30, '兔猎 · 看看剩牌', { fill: '#1f3a2e', border: '#66bb6a', color: '#c8f5d0', size: 12 })) act.rabbit();
-  }
+  // 兔猎整合进休息倒计时面板（兔猎只在两局之间可用）
 
   // 快捷表情按钮（自己名牌右侧）
   const EMOTES = ['👍', '😂', '😭', '🤔', '🔥', '👏'];
@@ -294,10 +291,45 @@ export function drawTable(ctx, S, act) {
     drawTournamentOver(ctx, snap, act);
   }
 
-  // 等待下一局
+  // 等待下一局：休息倒计时面板（继续 / 兔猎 / 退出）
   if (!hand && snap.phase === 'playing' && !snap.tournamentOver) {
-    if (FX.t - (anim.resultsAt || 0) > 1.5) {
-      drawPixelText(ctx, '下一局即将开始…', cx, cy - 20, 18, '#f4efe3', 'center', '#0c0a18');
+    if (snap.break) {
+      const remain = Math.max(0, snap.break.deadline - Date.now());
+      const sec = Math.ceil(remain / 1000);
+      const meB = snap.seats.find(s2 => !s2.empty && s2.seat === snap.you.seat);
+      const iAmIn = !!(meB && meB.chips > 0 && !meB.sittingOut && !meB.eliminated);
+      const pw = 384, ph = 86, px0 = 480 - pw / 2, py0 = 288;
+      ctx.fillStyle = 'rgba(12, 9, 26, 0.88)';
+      ctx.fillRect(px0, py0, pw, ph);
+      ctx.strokeStyle = th.panelBorder;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(px0 + 1, py0 + 1, pw - 2, ph - 2);
+      const readyTxt = snap.break.need > 1 ? `（就绪 ${snap.break.ready}/${snap.break.need}）` : '';
+      const title = S.breakReadySelf && snap.break.need > 1
+        ? `已就绪，等待其他玩家${readyTxt}`
+        : `下一局 ${sec} 秒后开始${readyTxt}`;
+      drawPixelText(ctx, title, 480, py0 + 12, 14, th.text, 'center', '#0c0a18');
+      // 倒计时进度条（绿→红渐变，临期红闪）
+      drawTimeBar(ctx, 480 - 120, py0 + 34, 240, Math.min(1, remain / (snap.break.total || 8000)));
+      // 按钮行：继续（参战者）/ 兔猎（无人跟注时）/ 退出房间
+      const by2 = py0 + 48;
+      let bx2 = px0 + 20;
+      if (iAmIn) {
+        const readyLabel = S.breakReadySelf ? '已就绪 ✓' : '继续 ▸';
+        if (button(ctx, 'nextReady', bx2, by2, 104, 30, readyLabel, {
+          size: 13, fill: '#1e4433', border: th.ok, color: '#c8f5d0', disabled: S.breakReadySelf,
+        })) act.readyNext();
+      } else {
+        drawPixelText(ctx, '观战中', bx2 + 42, by2 + 8, 12, th.textFaint, 'center');
+      }
+      bx2 += 114;
+      if (snap.rabbitAvail) {
+        if (button(ctx, 'rabbit', bx2, by2, 122, 30, '兔猎 · 看看剩牌', { size: 12, fill: '#1f3a2e', border: th.ok, color: '#c8f5d0' })) act.rabbit();
+        bx2 += 132;
+      }
+      if (button(ctx, 'breakLeave', bx2, by2, 100, 30, '退出房间', { size: 13, fill: '#4a1f24', border: th.danger, color: '#ffc9c7' })) act.leave();
+    } else if (FX.t - (anim.resultsAt || 0) > 1.5) {
+      drawPixelText(ctx, '下一局即将开始…', cx, cy - 20, 18, th.text, 'center', '#0c0a18');
     }
   }
 

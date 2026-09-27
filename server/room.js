@@ -16,16 +16,17 @@ export const BLIND_LEVELS = [
 
 const ACTION_TIME = 30000;        // 人类行动超时
 const BOT_THINK = [800, 2600];    // 机器人思考延迟
-const HAND_BREAK = 4200;          // 一手结束到下一手的间隔
+const HAND_BREAK = 4200;          // 一手结束到下一手的间隔（结算动画播完）
+const HAND_BREAK_WAIT = 8000;     // 两局之间休息倒计时（有真人参战时，可点「继续」提前）
 const RUNOUT_STEP = 1300;         // 全下跑牌每条街间隔
 const ROOM_IDLE_CLOSE = 45000;    // 无人房间关闭时间
 // 真人行动节奏：等下注筹码飞行播完(客户端 flyChips dur 0.42~0.6s + seqPush 起飞延迟 ~640ms ≈ 1.24s)+ 0.2s 最小停顿
 const ACTION_PACING = 1400;
 // 手牌事件的快照合并窗口：窗口内多次状态变化合并为一次全量快照广播
 const SNAPSHOT_MERGE_MS = 150;
-export const TIMING = { ACTION_TIME, BOT_THINK, HAND_BREAK, RUNOUT_STEP, ROOM_IDLE_CLOSE, ACTION_PACING };
+export const TIMING = { ACTION_TIME, BOT_THINK, HAND_BREAK, HAND_BREAK_WAIT, RUNOUT_STEP, ROOM_IDLE_CLOSE, ACTION_PACING };
 // 只服务端内部消费、客户端不处理的事件：不发广播
-const CLIENT_EV_SKIP = new Set(['hole', 'action_required', 'hand_stats', 'runout']);
+const CLIENT_EV_SKIP = new Set(['hole', 'action_required', 'hand_stats', 'runout', 'hand_break']);
 
 export class Room {
   constructor(lobby, code, hostToken) {
@@ -47,6 +48,8 @@ export class Room {
     this._idleTimer = null;     // 空房间闲置关闭计时器
     this._syncPending = false;  // 快照合并：是否有排定的延迟广播
     this._lastSyncAt = 0;
+    this.breakDeadline = 0;     // 两局之间休息倒计时截止（0 = 不在休息期）
+    this.breakReady = new Set(); // 已点「继续」的参战真人 token
 
     // 锦标赛 / 回放 / 战绩状态
     this.handLog = [];          // 最近手牌流水（回放用）
@@ -255,6 +258,7 @@ export class Room {
 
   maybeAutoNext() {
     if (this.phase !== 'playing' || this.closed) return;
+    if (this.breakDeadline) return; // 休息倒计时期间由倒计时/就绪推进，避免抢跑
     if (this.hand && this.hand.phase !== 'done') return;
     if (this.eligibleSeats().length >= 2) {
       this.addTimer(() => {
@@ -265,6 +269,7 @@ export class Room {
 
   startHand() {
     this.rabbitState = null;
+    this.breakDeadline = 0;
     if (this.closed || this.phase !== 'playing') return;
     if (this.hand && this.hand.phase !== 'done') return;
     this.cleanupAfterHand();
@@ -440,8 +445,53 @@ export class Room {
       this.lobby.onRoomsChanged();
       return;
     }
-    if (this.eligibleSeats().length >= 2) this.startHand();
+    if (this.eligibleSeats().length >= 2) this.startBreak();
     this.lobby.onRoomsChanged();
+  }
+
+  // ── 两局之间：休息倒计时 ────────────────────────────
+  // 有真人参战下一局时给出明确间隙：倒计时到期或全部参战真人点「继续」即开局；
+  // 「退出」就是普通离房。纯机器人桌保持原节奏直接开。
+  startBreak() {
+    if (this.closed || this.phase !== 'playing') return;
+    const need = this._breakNeed();
+    if (need === 0) { this.startHand(); return; }
+    this.breakReady = new Set();
+    this.breakDeadline = Date.now() + TIMING.HAND_BREAK_WAIT;
+    this.addTimer(() => {
+      if (!this.breakDeadline) return; // 已被全员就绪提前开局
+      this.breakDeadline = 0;
+      this.startHand();
+    }, TIMING.HAND_BREAK_WAIT);
+  }
+
+  // 参战下一局的真人（有座、有码、未休息、未出局、在线）
+  _humanEligible(pl) {
+    if (!pl || pl.seat < 0) return false;
+    const s = this.seats[pl.seat];
+    return !!s && !s.isBot && s.chips > 0 && !s.sittingOut && !s.eliminated;
+  }
+
+  _breakNeed() {
+    let n = 0;
+    for (const p of this.players.values()) {
+      if (p.connected && this._humanEligible(p)) n++;
+    }
+    return n;
+  }
+
+  // 「继续」：全部参战真人就绪 → 提前开局；否则广播最新就绪数
+  readyNext(token) {
+    if (!this.breakDeadline) return { ok: false, err: 'not_break' };
+    const pl = this.players.get(token);
+    if (pl && this._humanEligible(pl) && !this.breakReady.has(token)) {
+      this.breakReady.add(token);
+      if (this.breakReady.size >= this._breakNeed()) {
+        this.breakDeadline = 0;
+        this.startHand();
+      }
+    }
+    return { ok: true };
   }
 
   // ── 客户端动作 ─────────────────────────────────────
@@ -639,6 +689,12 @@ export class Room {
       lastResults: this.lastResults,
       blinds: this.settings.mode === 'tournament' ? this.currentBlinds() : null,
       tournamentOver: this.tournamentOver,
+      break: this.breakDeadline ? {
+        deadline: this.breakDeadline,
+        total: TIMING.HAND_BREAK_WAIT,
+        ready: this.breakReady.size,
+        need: this._breakNeed(),
+      } : null,
       hasHistory: this.handLog.length > 0,
       rabbitAvail: !!(this.rabbitState && !this.rabbitState.shown),
       you: {
