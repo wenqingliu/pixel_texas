@@ -57,9 +57,11 @@ server/                 服务端（Node.js，唯一依赖 ws）
   lobby.js              房间注册、快速匹配、房间码、会话重连、个人档案与风格分析
   room.js               座位、机器人补位、行动计时、锦标赛盲注阶梯、手牌流水归档、快照广播
   hand.js               牌局状态机：盲注→下注轮→公共牌→边池结算（含 VPIP/PFR 采集）
-  evaluator.js          7 选 5 牌型评估（加密安全洗牌）+ 成牌 5 张提取
+  evaluator.js          牌型评估（打分核心在 shared/，与浏览器同源）+ 加密安全洗牌
   bots/bot.js           三档机器人 AI（蒙特卡洛胜率复用 evaluator）
-  storage.js            JSON 落盘（个人档案 data/profiles.json）
+  storage.js            JSON 落盘（个人档案 data/profiles.json，PT_DATA_DIR 可隔离）
+shared/                 前后端共用模块（零依赖，服务器托管在 /shared/）
+  evaluator.js          7 选 5 牌型评估核心：服务端与浏览器同一实现，不会漂移
 client/                 前端（原生 ES Module，无构建步骤）
   js/render.js          主菜单 / 房间等待 / 牌桌 / 回放·战绩·个人中心面板（960×540）
   js/cards.js           四色像素卡牌、花色点阵图、筹码堆

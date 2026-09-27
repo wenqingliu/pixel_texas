@@ -111,5 +111,17 @@ const C = (s) => {
   console.log(`  eval7 性能: 50万次 ${ms.toFixed(0)}ms（消 acc=${acc > 0 ? 1 : 0}）`);
 }
 
+// 共享评估器：客户端模块在 Node 里可用，且与服务端是同一实现（防止两端漂移）
+{
+  const shared = await import('../shared/evaluator.js');
+  const client = await import('../client/js/equity.js');
+  const serverMod = await import('../server/evaluator.js');
+  assert(serverMod.eval7 === shared.eval7, '服务端 eval7 与 shared 同一实现（re-export）');
+  assert(client.eval7 === shared.eval7, '客户端 eval7 与 shared 同一实现');
+  const e = client.equity([48, 49], [], 1, 800); // AA 单挑
+  assert(e > 0.7 && e < 0.95, `客户端蒙卡在 node 可运行且合理（实际 ${e}）`);
+  console.log('  共享评估器: 服务端/客户端同一实现 ✓');
+}
+
 console.log(fails === 0 ? 'evaluator 全部通过 ✓' : `evaluator 有 ${fails} 项失败 ✗`);
 process.exit(fails === 0 ? 0 : 1);

@@ -10,6 +10,7 @@ import { Lobby } from './lobby.js';
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLIENT_DIR = path.join(ROOT, 'client');
+const SHARED_DIR = path.join(ROOT, 'shared'); // 客户端/服务端共用模块（评估器）
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -28,9 +29,12 @@ const MIME = {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   const pathname = decodeURIComponent(url.pathname);
-  let file = path.normalize(path.join(CLIENT_DIR, pathname === '/' || pathname === '' ? 'index.html' : pathname));
+  // /shared/* 映射到项目根 shared/（两端同源评估器），其余走 client/
+  let file, baseDir;
+  if (pathname.startsWith('/shared/')) { baseDir = SHARED_DIR; file = path.normalize(path.join(SHARED_DIR, pathname.slice('/shared'.length))); }
+  else { baseDir = CLIENT_DIR; file = path.normalize(path.join(CLIENT_DIR, pathname === '/' || pathname === '' ? 'index.html' : pathname)); }
   // 前缀检查须带路径分隔符，防同级目录（如 client2）绕过
-  if (file !== CLIENT_DIR && !file.startsWith(CLIENT_DIR + path.sep)) { res.writeHead(403); res.end(); return; }
+  if (file !== baseDir && !file.startsWith(baseDir + path.sep)) { res.writeHead(403); res.end(); return; }
   fs.readFile(file, (err, buf) => {
     if (err) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
