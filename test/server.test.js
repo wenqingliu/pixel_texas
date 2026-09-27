@@ -9,6 +9,15 @@ function assert(cond, msg) {
   if (!cond) { fails++; console.error('  ✗ ' + msg); }
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// 轮询等待条件成立（防固定 sleep 偶发不足导致的抖动）
+const until = async (fn, timeoutMs = 6000) => {
+  const t0 = Date.now();
+  for (;;) {
+    const v = fn();
+    if (v || Date.now() - t0 > timeoutMs) return v;
+    await sleep(30);
+  }
+};
 
 // 测试提速
 TIMING.ACTION_TIME = 400;
@@ -149,7 +158,7 @@ const last = (ws, t) => [...ws.inbox].reverse().find(m => m.t === t);
   // A 开始对局
   const sg = room.startGame();
   assert(sg.ok, '开局成功');
-  await sleep(80);
+  await until(() => room.hand && room.hand.phase !== 'done');
   assert(room.hand && room.hand.phase !== 'done', '手牌进行中');
   assert(last(wsA, 'hole') && last(wsB, 'hole'), '双方收到底牌');
 
@@ -249,7 +258,7 @@ const last = (ws, t) => [...ws.inbox].reverse().find(m => m.t === t);
   const token = lobby.login(ws, '记录员', null);
   const room = lobby.createRoom(token, { botsFill: true });
   room.startGame();
-  await sleep(1200);
+  await until(() => room.handLog.length > 0, 8000);
   assert(room.handLog.length > 0, 'cash 房间也有流水');
   assert(room.handLog.some(h => h.actions.some(a => a.k === 'act' && typeof a.put === 'number')), '流水 act 事件带 put 字段');
   assert(room.handLog.every(h => h.seats.every(s => s.name && s.chips > 0)), '流水座位筹码应为正');
@@ -269,7 +278,7 @@ const last = (ws, t) => [...ws.inbox].reverse().find(m => m.t === t);
   // 打两手（全机器人陪练）
   const room = lobby.createRoom(token, { botsFill: true });
   room.startGame();
-  await sleep(2500);
+  await until(() => lobby.profileView(token).hands >= 1, 10000);
   const view = lobby.profileView(token);
   assert(view.hands >= 1, `档案局数应 ≥1，实际 ${view.hands}`);
   assert(typeof view.vpip === 'number' && typeof view.pfr === 'number', 'VPIP/PFR 指标存在');
