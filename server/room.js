@@ -15,12 +15,13 @@ export const BLIND_LEVELS = [
 ];
 
 const ACTION_TIME = 30000;        // 人类行动超时
-const BOT_THINK = [800, 2600];    // 机器人思考延迟
+const BOT_THINK = [200, 1200];    // 机器人思考延迟（叠加在行动节奏之上，总延迟 1.2~2.2s）
 const HAND_BREAK = 4200;          // 一手结束到下一手的间隔（结算动画播完）
 const RUNOUT_STEP = 1300;         // 全下跑牌每条街间隔
 const ROOM_IDLE_CLOSE = 45000;    // 无人房间关闭时间
-// 真人行动节奏：等下注筹码飞行播完(客户端 flyChips dur 0.42~0.6s + seqPush 起飞延迟 ~640ms ≈ 1.24s)+ 0.2s 最小停顿
-const ACTION_PACING = 1400;
+// 真人/机器人统一行动节奏：上家动作事件后等 ~1s（客户端说话+筹码飞行动画 ≈740ms + 停顿），
+// 下家才开始行动——机器人思考时间叠加在其后，保证"说话永远在上家筹码落地之后"
+const ACTION_PACING = 1000;
 // 手牌事件的快照合并窗口：窗口内多次状态变化合并为一次全量快照广播
 const SNAPSHOT_MERGE_MS = 150;
 export const TIMING = { ACTION_TIME, BOT_THINK, HAND_BREAK, RUNOUT_STEP, ROOM_IDLE_CLOSE, ACTION_PACING };
@@ -345,7 +346,8 @@ export class Room {
       if (!p) return;
       if (p.isBot) {
         const [t0, t1] = TIMING.BOT_THINK;
-        const delay = t0 + Math.random() * (t1 - t0);
+        // 统一节奏：等上家动画播完再开始"思考"
+        const delay = TIMING.ACTION_PACING * (TIMING.ACTION_TIME / 30000) + t0 + Math.random() * (t1 - t0);
         this.addTimer(() => this._botAct(p), delay);
       } else {
         // 断线托管开启且该玩家掉线：AI 以普通档代打本手，重连后自动交还

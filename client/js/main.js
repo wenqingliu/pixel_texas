@@ -49,6 +49,7 @@ const S = {
 };
 
 const net = new Net(onMsg);
+window.__net = net; // 调试：包一层 net.onMsg 可记录消息时序
 S.nameInput = net.name;
 if (!validAvatar(S.avatar)) S.avatar = defaultAvatar(S.nameInput);
 
@@ -94,9 +95,22 @@ window.addEventListener('keydown', (e) => {
 
 // DOM 输入框定位（逻辑坐标 → stage 内绝对定位）
 function updateDomInput() {
-  // 输入框只在菜单/个人中心出现；牌桌与连接遮罩时隐藏
+  // 输入框只在菜单/个人中心/房间大厅出现；牌桌与连接遮罩时隐藏
   if (S.screen !== 'menu' || !S.connected) {
     domInput.style.display = 'none';
+    return;
+  }
+  if (S.panel === 'rooms') {
+    // 房间大厅：房间码输入
+    const jbox = S.dom.join;
+    if (!jbox.w) { domInput.style.display = 'none'; return; }
+    domInput.style.display = 'block';
+    domInput.style.left = jbox.x + 'px';
+    domInput.style.top = jbox.y + 'px';
+    domInput.style.width = jbox.w + 'px';
+    domInput.style.height = jbox.h + 'px';
+    domInput.style.fontSize = (jbox.h * 0.5) + 'px';
+    if (domInput.dataset.mode !== 'join') syncDomMode('join');
     return;
   }
   if (S.panel === 'profile') {
@@ -267,21 +281,22 @@ function handleEv(ev) {
         : ev.type === 'check' ? '看牌'
           : ev.type === 'call' ? `跟注 ${ev.amount}`
             : ev.allIn ? `全下 ${ev.amount}` : `加注到 ${ev.amount}`;
-      // 1) 说话：行动浮字
+      // 节奏：说话后立刻起飞（120ms），飞行 ~620ms 落定——整段动画 ≈740ms，
+      // 与服务端 ACTION_PACING(1s) 对齐，下家的行动永远在上家筹码落地之后
       seqPush(() => {
         if (p) floatText(p.x, p.y - 30, label, ev.type === 'fold' ? '#9a92c2' : ev.allIn ? '#ef5350' : '#ffd76e', 14);
         if (ev.type === 'fold') sfx.fold();
         else if (ev.allIn) { sfx.allin(); shake(0.7); FX.flash = 0.55; }
         else if (ev.type === 'check') sfx.turn();
-      }, ev.allIn ? 650 : 420);
+      }, ev.allIn ? 300 : 120);
       // 2) 筹码飞行
       if (ev.put > 0) {
         const to = betSpotFor(snap, ev.seat);
         seqPush(() => {
           if (p) flyChips(p.x, p.y - 10, to.x, to.y, { n: chipN(ev.put, snap.settings.bb), kind: 'bet' });
-        }, 640);
+        }, 620);
         // 3) 筹码落定 → 显示下注额度数字
-        seqPush(() => { addBet(ev.seat, ev.put); sfx.chip(); }, 160);
+        seqPush(() => { addBet(ev.seat, ev.put); sfx.chip(); }, 0);
       }
       // 弃牌：座位上已有的下注筹码随之合入底池
       if (ev.type === 'fold') {
@@ -290,7 +305,7 @@ function handleEv(ev) {
           seqPush(() => {
             const from = betSpotFor(snap, ev.seat);
             flyChips(from.x, from.y, POT.x, POT.y, { n: 3, kind: 'bet' });
-          }, 640);
+          }, 620);
           seqPush(() => { addBet(ev.seat, -had.amount); }, 0);
         }
       }
@@ -429,9 +444,10 @@ const act = {
     if (!code) { toast('请输入房间码'); return; }
     net.send({ t: 'join_room', code });
     S.joinOpen = false;
+    S.panel = null;
     syncDomMode('name');
   },
-  joinCode: (code) => net.send({ t: 'join_room', code }),
+  joinCode: (code) => { net.send({ t: 'join_room', code }); S.panel = null; syncDomMode('name'); },
   leave: () => {
     net.send({ t: 'leave' });
     S.snap = null;
@@ -461,7 +477,8 @@ const act = {
   openStats: () => { S.panel = 'stats'; net.send({ t: 'get_history' }); },
   openHistory: () => { S.panel = 'history'; net.send({ t: 'get_history' }); },
   openProfile: () => { S.panel = 'profile'; S.avatarDraft = null; net.send({ t: 'get_profile' }); },
-  closePanel: () => { S.panel = null; S.replay = null; S.avatarDraft = null; },
+  closePanel: () => { S.panel = null; S.replay = null; S.avatarDraft = null; syncDomMode('name'); },
+  openRooms: () => { S.panel = 'rooms'; syncDomMode('join'); },
   setAvatarDraft: (av) => { S.avatarDraft = av; },
   saveProfile: () => {
     if (S.avatarDraft) {
@@ -581,7 +598,7 @@ function tick(now) {
     if (!S.connected) {
       drawConnectOverlay(ctx, '正在连接服务器…');
     } else if (S.screen === 'menu' || !S.snap) {
-      if (S.panel === 'profile') {
+      if (S.panel === 'profile' || S.panel === 'rooms') {
         drawBackdrop(ctx);
         drawPanels(ctx, S, act);
       } else {
