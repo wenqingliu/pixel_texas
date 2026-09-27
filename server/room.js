@@ -550,7 +550,15 @@ export class Room {
     this.settings.blindsEvery = Math.max(2, Math.min(20, this.settings.blindsEvery | 0 || 8));
     this.settings.actionTime = Math.max(10, Math.min(90, this.settings.actionTime | 0 || 30));
     if (!LEVEL_NAMES[this.settings.botLevel]) this.settings.botLevel = 'normal';
+    // 盲注/买入：必须是有限数值，非法值回落默认（NaN 会污染整手牌的筹码守恒）
+    const intOr = (v, dflt) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? n : dflt; };
+    this.settings.sb = Math.max(1, Math.min(10000, intOr(this.settings.sb, DEFAULT_SETTINGS.sb)));
+    this.settings.bb = Math.max(1, Math.min(100000, intOr(this.settings.bb, DEFAULT_SETTINGS.bb)));
+    if (this.settings.bb <= this.settings.sb) this.settings.bb = this.settings.sb * 2;
+    this.settings.buyIn = Math.max(100, Math.min(10000000, intOr(this.settings.buyIn, DEFAULT_SETTINGS.buyIn)));
+    this.settings.botsFill = !!this.settings.botsFill;
     this.broadcast({ t: 'ev', kind: 'settings', settings: this.settings });
+    this.lobby.onRoomsChanged(); // 客户端不消费 settings 事件，靠快照同步设置显示
     return { ok: true };
   }
 

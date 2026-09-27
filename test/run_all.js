@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const tests = ['evaluator.test.js', 'hand.test.js', 'server.test.js'];
+const tests = ['evaluator.test.js', 'hand.test.js', 'lobby.test.js', 'server.test.js'];
 
 let failed = 0;
 for (const t of tests) {
