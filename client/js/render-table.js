@@ -41,7 +41,7 @@ export function betSpotFor(snap, seat) {
   }
   return { x, y };
 }
-export const POT_POS = { x: 480, y: 174 }; // 底池筹码堆基点（与绘制一致）
+export const POT_POS = { x: 480, y: 168 }; // 底池筹码堆基点（与绘制一致，与公牌区保持间距）
 
 function seatPos(displayIdx, n, heroSpecial) {
   const cx = 480, cy = 240;
@@ -359,63 +359,66 @@ function drawSeat(ctx, s, pos, o) {
     ctx.fill();
     ctx.restore();
   }
-  ctx.fillStyle = s.folded ? '#1d1936' : '#241f42';
+  ctx.fillStyle = s.folded ? th.panelDim : th.panel;
   ctx.fillRect(x, y, plateW, plateH);
-  ctx.strokeStyle = s.folded ? '#2a2548' : '#3a3560';
+  ctx.strokeStyle = th.panelBorder;
   ctx.lineWidth = 2;
   ctx.strokeRect(x + 1, y + 1, plateW - 2, plateH - 2);
   ctx.globalAlpha = s.folded ? 0.55 : 1;
   // 头像
-  drawAvatar(ctx, avX, avY, avSize, s.avatar || '', { border: isActor ? th.accent : '#3a3560' });
-  // 状态条：名牌下方紧贴 5 像素(限条之上)，9 像素行
-  // 优先级：弃牌 > 全下 > 行动中(脉冲) > 最近一次动作 > 等待(隐藏)
-  // 持续到手牌结束(不随街切换)
+  drawAvatar(ctx, avX, avY, avSize, s.avatar || '', { border: isActor ? th.accent : th.panelBorder });
+  // 状态行 + 行动时限条合并为一行（名牌下方）：状态文字居左、条占右侧余宽。
+  // 不再向下叠两行，避免顶部座位的状态/倒计时挤进桌面区域。
+  // 优先级：出局 > 全下 > 已弃牌 > 行动中(脉冲) > 最近一次动作 > 等待(隐藏)
   {
     let stLabel = null, stColor = null, stPulse = false;
-    if (s.folded) { stLabel = '已弃牌'; stColor = '#6a6484'; }
-    else if (s.allIn) { stLabel = '全下'; stColor = '#ef5350'; }
+    if (s.eliminated) { stLabel = '出局'; stColor = th.danger; }
+    else if (s.allIn && !s.folded) { stLabel = '全下'; stColor = th.danger; }
+    else if (s.folded) { stLabel = '已弃牌'; stColor = th.textFaint; }
     else if (isActor) {
-      if (s.isBot) { stLabel = '思考中…'; stColor = '#5c8dff'; stPulse = true; }
-      else { stLabel = '行动中…'; stColor = '#ffd76e'; stPulse = true; }
+      if (s.isBot) { stLabel = '思考中…'; stColor = th.info; stPulse = true; }
+      else { stLabel = '行动中…'; stColor = th.gold; stPulse = true; }
     } else if (s.lastAction) {
       const la = s.lastAction;
-      if (la.type === 'check') { stLabel = '看牌'; stColor = '#ffd76e'; }
-      else if (la.type === 'call') { stLabel = `跟注 ${fmt(la.amount)}`; stColor = '#ffd76e'; }
+      if (la.type === 'check') { stLabel = '看牌'; stColor = th.gold; }
+      else if (la.type === 'call') { stLabel = `跟注 ${fmt(la.amount)}`; stColor = th.gold; }
       else if (la.type === 'raise') {
         stLabel = la.allIn ? `全下 ${fmt(la.amount)}` : `加注到 ${fmt(la.amount)}`;
-        stColor = la.allIn ? '#ef5350' : '#ffd76e';
-      } else if (la.type === 'fold') { stLabel = '已弃牌'; stColor = '#6a6484'; }
+        stColor = la.allIn ? th.danger : th.gold;
+      } else if (la.type === 'fold') { stLabel = '已弃牌'; stColor = th.textFaint; }
     }
+    const stFs = mini ? 9 : 10;
+    const stY = y + plateH + 4;
+    const barY = y + plateH + 7;
+    const showBar = isActor && !s.folded;
+    let stW = 0;
     if (stLabel) {
-      const stY = y + plateH + 5;
-      const stFs = mini ? 8 : 9;
       if (stPulse) ctx.globalAlpha = 0.75 + 0.25 * Math.sin(FX.t * 7);
-      drawPixelText(ctx, stLabel, x + plateW / 2, stY, stFs, stColor, 'center', '#0c0a18');
+      drawPixelText(ctx, stLabel, showBar ? x + 4 : x + plateW / 2, stY, stFs, stColor,
+        showBar ? 'left' : 'center', '#0c0a18');
       ctx.globalAlpha = s.folded ? 0.55 : 1;
+      stW = stLabel.length * stFs + 2;
+    }
+    // 人类：动态时限条（绿→红渐变，低时红闪）；机器人：蓝色扫描条
+    if (showBar) {
+      const barX = stW > 0 ? x + 4 + stW + 6 : x + 4;
+      const barW = plateW - 8 - (stW > 0 ? stW + 6 : 0);
+      if (barW > 14) {
+        if (!s.isBot && hand && hand.deadline) {
+          const total = Math.max(1, (snap.settings.actionTime || 30) * 1000);
+          const remain = Math.max(0, hand.deadline - Date.now());
+          drawTimeBar(ctx, barX, barY, barW, remain / total);
+        } else {
+          drawThinkBar(ctx, barX, barY, barW);
+        }
+      }
     }
   }
-  // 行动时限条（人类：像素分段倒计时 / 机器人：扫描思考条）
-  // 位置：状态条之下（状态条无显示时空出来贴近名牌）
-  if (isActor && !s.folded) {
-    const barX = x + 8, barY = y + plateH + 15, barW = plateW - 16;
-    if (!s.isBot && hand && hand.deadline) {
-      const total = Math.max(1, (snap.settings.actionTime || 30) * 1000);
-      const remain = Math.max(0, hand.deadline - Date.now());
-      drawTimeBar(ctx, barX, barY, barW, remain / total);
-      const low = remain / total < 0.25;
-      drawPixelText(ctx, Math.ceil(remain / 1000) + 's', barX + barW + 5, barY - 2, 11,
-        low ? '#ef5350' : '#f4efe3', 'left', '#0c0a18');
-    } else {
-      drawThinkBar(ctx, barX, barY, barW);
-    }
-  }
-  drawPixelText(ctx, s.name.slice(0, mini ? 4 : 6), nameX, y + 5, mini ? 12 : 13, '#f4efe3');
-  drawPixelText(ctx, fmt(s.chips), nameX, y + (mini ? 22 : 25), mini ? 12 : 14, '#ffd76e');
-  if (s.allIn && !s.folded) drawPixelText(ctx, 'ALL IN', x + plateW - 6, y + (mini ? 22 : 25), 11, '#ef5350', 'right');
-  if (s.eliminated) drawPixelText(ctx, '出局', x + plateW - 6, y + (mini ? 22 : 25), 11, '#ef5350', 'right');
-  // 真人 HUD：VPIP 标签（GG 式数据，10 手起）
+  drawPixelText(ctx, s.name.slice(0, mini ? 4 : 6), nameX, y + 5, mini ? 12 : 13, th.text);
+  drawPixelText(ctx, fmt(s.chips), nameX, y + (mini ? 22 : 25), mini ? 12 : 14, th.gold);
+  // 真人 HUD：VPIP 标签（GG 式数据，10 手起）移入名牌，与筹码同行右对齐
   if (!s.isBot && s.hud) {
-    drawPixelText(ctx, 'V' + s.hud.vpip + '%' , x + plateW - 6, y + (mini ? 36 : 39), 9, '#7a92c2', 'right');
+    drawPixelText(ctx, 'V' + s.hud.vpip + '%', x + plateW - 6, y + (mini ? 24 : 27), mini ? 9 : 10, th.textFaint, 'right');
   }
   // 机器人徽章（头像左上角外延，蓝底 "AI" 字，少遮挡头像）
   if (s.isBot) {
@@ -514,13 +517,19 @@ function drawHero(ctx, s, snap, hand, isWinner, act, highlight) {
   ctx.strokeRect(plateX + 1, plateY + 1, plateW - 2, plateH - 2);
   drawPixelText(ctx, s.name.slice(0, 6), plateX + 8, plateY + 4, 13, '#66bb6a');
   drawPixelText(ctx, fmt(s.chips), plateX + 8, plateY + 20, 14, '#ffd76e');
-  // 胜率/手牌名 挤进名牌下半部（y+36, 9px 字号居中）
+  // 胜率/手牌名：暗底胶囊一行（与其它座位的"状态行"同一节奏），11px 可读；
+  // 摊牌横幅期间让位给赢家牌型标签
   const wr = S_winRate();
-  if (wr != null && snap.you.cards && !s.folded) {
+  if (wr != null && snap.you.cards && !s.folded && !(anim.results && FX.t - anim.resultsAt < 4.5)) {
     const wrPct = Math.round(wr * 100);
-    const col = wrPct >= 60 ? '#66bb6a' : wrPct >= 40 ? '#ffd76e' : '#ef5350';
+    const col = wrPct >= 60 ? th.ok : wrPct >= 40 ? th.gold : th.danger;
     const label = `胜率 ${wrPct}%${renderState.handName ? ' · ' + renderState.handName : ''}`;
-    drawPixelText(ctx, label, plateX + plateW / 2, plateY + 36, 9, col, 'center', '#0c0a18');
+    const pw = Math.min(label.length * 11 + 14, 240);
+    const pcx = plateX + plateW / 2;
+    const py2 = plateY + plateH + 4;
+    ctx.fillStyle = 'rgba(10, 8, 22, 0.72)';
+    ctx.fillRect(pcx - pw / 2, py2, pw, 18);
+    drawPixelText(ctx, label, pcx, py2 + 3, 11, col, 'center', '#0c0a18');
   }
   if (s.allIn && !s.folded) drawPixelText(ctx, 'ALL IN', plateX + plateW - 8, plateY + 20, 12, '#ef5350', 'right');
   if (s.sittingOut) drawPixelText(ctx, '休息中', plateX + plateW - 8, plateY + 4, 11, '#9a92c2', 'right');
@@ -584,6 +593,7 @@ function drawActionPanel(ctx, S, act) {
   const hand = snap.hand;
   const me = snap.seats.find(s => !s.empty && s.seat === snap.you.seat);
   if (!me) return;
+  const th = getTheme();
 
   if (me.sittingOut || (me.chips <= 0 && !me.inHand)) {
     if (snap.settings.mode === 'tournament') {
@@ -604,20 +614,20 @@ function drawActionPanel(ctx, S, act) {
   if (!S.prompt || !hand || hand.actorSeat !== snap.you.seat) {
     anim.panelShown = false;
     if (me.inHand && !me.folded) {
-      drawPixelText(ctx, '等待其他玩家行动…', 790, H - 40, 13, '#6a6484', 'center');
+      drawPixelText(ctx, '等待其他玩家行动…', 790, H - 40, 13, '#8b85ad', 'center');
       // 预操作快捷（未轮到自己时）：check_fold / call_any + 当前已预设状态
       const pa = S.preAction || null;
       const px2 = 640, py2 = H - 110;
       // 面板底（与主面板同款，但只一行）
       ctx.fillStyle = 'rgba(16, 12, 34, 0.78)';
       ctx.fillRect(px2 - 12, py2 - 12, 320, 60);
-      ctx.strokeStyle = pa ? '#ffd76e' : '#3a3560';
+      ctx.strokeStyle = pa ? '#ffd76e' : th.panelBorder;
       ctx.lineWidth = 2;
       ctx.strokeRect(px2 - 12, py2 - 12, 320, 60);
       drawPixelText(ctx, '预操作', px2, py2 - 4, 11, '#9ad0ff', 'left', '#0c0a18');
       // 状态标签
       const stateText = pa === 'check_fold' ? '已设:看牌/弃牌' : pa === 'call_any' ? '已设:跟到底' : '未预设';
-      drawPixelText(ctx, stateText, px2 + 308, py2 - 4, 11, pa ? '#ffd76e' : '#6a6484', 'right', '#0c0a18');
+      drawPixelText(ctx, stateText, px2 + 308, py2 - 4, 11, pa ? '#ffd76e' : '#8b85ad', 'right', '#0c0a18');
       // 三个按钮
       const cfActive = pa === 'check_fold', caActive = pa === 'call_any';
       if (button(ctx, 'pre_cf', px2, py2 + 8, 96, 32, '看牌/弃牌', {
@@ -645,7 +655,7 @@ function drawActionPanel(ctx, S, act) {
   // 面板底
   ctx.fillStyle = 'rgba(16, 12, 34, 0.86)';
   ctx.fillRect(px - 12, py - 12, 320, 108);
-  ctx.strokeStyle = '#3a3560';
+  ctx.strokeStyle = th.panelBorder;
   ctx.lineWidth = 2;
   ctx.strokeRect(px - 12, py - 12, 320, 108);
 
@@ -692,7 +702,7 @@ function drawActionPanel(ctx, S, act) {
   // 底池赔率提示
   if (o.canCall && o.callAmount > 0) {
     const odds = Math.round(o.callAmount / Math.max(1, o.pot + o.callAmount) * 100);
-    drawPixelText(ctx, `赔率${odds}%`, px + 250, py + 20, 10, '#6a6484');
+    drawPixelText(ctx, `赔率${odds}%`, px + 250, py + 19, 11, th.textFaint);
   }
   ctx.restore();
 }

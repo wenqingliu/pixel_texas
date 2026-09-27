@@ -59,7 +59,7 @@ export function button(ctx, id, x, y, w, h, label, opts = {}) {
     ctx.globalAlpha = 1;
   }
   const size = opts.size || 14;
-  drawPixelText(ctx, label, 0, -size / 2 - 1, size, opts.disabled ? '#6a6484' : (opts.color || '#f4efe3'), 'center');
+  drawPixelText(ctx, label, 0, -size / 2 - 1, size, opts.disabled ? '#8b85ad' : (opts.color || '#f4efe3'), 'center');
   ctx.restore();
 
   if (clicked && !opts.disabled) {
