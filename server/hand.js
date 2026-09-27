@@ -47,6 +47,8 @@ export class Hand {
       p.aggr = 0;           // 下注+加注次数
       p.calls = 0;          // 跟注次数
       p.showdown = false;   // 见摊牌
+      p.facedBet = false;        // 本手曾面对下注（被注）
+      p.foldedFacingBet = false; // 面对下注时弃牌
     }
   }
 
@@ -125,6 +127,7 @@ export class Hand {
   _setActor(p) {
     this.actor = p;
     p._awaiting = true;
+    if (this.toCall(p) > 0) p.facedBet = true; // 面对下注统计
     this.emit({
       kind: 'action_required', seat: p.seat,
       toCall: this.toCall(p),
@@ -159,6 +162,7 @@ export class Hand {
 
     if (type === 'fold') {
       p.folded = true;
+      if (toCall > 0) p.foldedFacingBet = true;
     } else if (type === 'check') {
       if (toCall > 0) { p._awaiting = true; return { ok: false, err: 'cannot_check' }; }
     } else if (type === 'call') {
@@ -300,6 +304,7 @@ export class Hand {
           net: p.lastDelta || 0, won: (p.lastDelta || 0) > 0,
           vpip: p.vpip, pfr: p.pfr, aggr: p.aggr, calls: p.calls,
           showdown: p.showdown, bestScore,
+          facedBet: !!p.facedBet, foldedFacingBet: !!p.foldedFacingBet,
         };
       }),
     });
@@ -414,6 +419,7 @@ export class Hand {
     const p = this.bySeat(seat);
     if (!p || p.folded || p.allIn) return { ok: false, err: 'not_in_hand' };
     if (this.actor && this.actor.seat === seat) return { ok: false, err: 'is_your_turn' };
+    if (this.toCall(p) > 0) { p.facedBet = true; p.foldedFacingBet = true; }
     p.folded = true;
     p.acted = true;
     p.lastAction = { type: 'fold', amount: 0, allIn: false };

@@ -6,7 +6,7 @@ import { load, saveSoon, saveNow } from './storage.js';
 const CODE_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 
 function emptyStats() {
-  return { hands: 0, wins: 0, net: 0, vpip: 0, pfr: 0, aggr: 0, calls: 0, showdowns: 0, showdownWins: 0, bestScore: 0, bestHand: '' };
+  return { hands: 0, wins: 0, net: 0, vpip: 0, pfr: 0, aggr: 0, calls: 0, showdowns: 0, showdownWins: 0, bestScore: 0, bestHand: '', faced: 0, foldedFaced: 0, recent: [] };
 }
 
 // 风格标签：VPIP/PFR 双维 + 激进度
@@ -61,6 +61,12 @@ export class Lobby {
       st.bestScore = d.bestScore;
       st.bestHand = d.bestHand || '';
     }
+    if (d.facedBet) st.faced++;
+    if (d.foldedFacingBet) st.foldedFaced++;
+    // 近 40 手净盈亏（个人中心趋势条用）
+    st.recent = st.recent || [];
+    st.recent.push(d.net || 0);
+    if (st.recent.length > 40) st.recent.shift();
     saveSoon('profiles', this.profiles);
   }
 
@@ -97,6 +103,8 @@ export class Lobby {
       wsd: pc(st.showdownWins, st.showdowns),       // 摊牌胜率
       showdownRate: pc(st.showdowns, st.hands),     // 见摊率
       bestHand: st.bestHand || '',
+      foldToBet: pc(st.foldedFaced, st.faced),        // 面对下注弃牌率
+      recent: (st.recent || []).slice(-40),           // 近若干手净盈亏
       style: styleLabel(st),
     };
   }

@@ -91,6 +91,7 @@ function drawProfilePanel(ctx, S, act) {
       ['净盈亏', (st.net >= 0 ? '+' : '') + fmt(st.net)],
       ['VPIP', st.vpip + '%'],
       ['PFR', st.pfr + '%'],
+      ['被注弃牌', st.foldToBet + '%'],
       ['激进度', String(st.agression)],
       ['摊牌胜率', st.wsd + '%'],
       ['最佳牌型', st.bestHand || '—'],
@@ -110,6 +111,20 @@ function drawProfilePanel(ctx, S, act) {
       ctx.strokeRect(sx, sy, 216, 34);
       drawPixelText(ctx, st.style.label, sx + 10, sy + 4, 14, '#ffd76e');
       drawPixelText(ctx, st.style.desc, sx + 10, sy + 19, 10, '#9a92c2');
+    }
+    // 近 40 手净盈亏趋势（绿上红下的小柱状）
+    const rec2 = st.recent || [];
+    if (rec2.length >= 2) {
+      const ty = f.y + 70 + rows.length * 24 + 48;
+      const maxAbs = Math.max(1, ...rec2.map(v => Math.abs(v)));
+      const bw2 = 216 / rec2.length;
+      const base = ty + 16;
+      drawPixelText(ctx, `近${rec2.length}手盈亏`, sx, ty - 4, 10, '#9a92c2');
+      for (let i = 0; i < rec2.length; i++) {
+        const h = Math.max(1, Math.abs(rec2[i]) / maxAbs * 14);
+        ctx.fillStyle = rec2[i] >= 0 ? '#66bb6a' : '#ef5350';
+        ctx.fillRect(sx + i * bw2, rec2[i] >= 0 ? base - h : base, Math.max(1, bw2 - 1), h);
+      }
     }
   }
   drawPixelText(ctx, '统计跨房间累计 · 每 20 局解锁风格分析', f.x + 130, f.y + f.h - 26, 11, '#8b85ad');
