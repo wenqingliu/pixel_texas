@@ -5,6 +5,7 @@ import { drawPixelText, drawFX, shakeOffset, FX, ease } from './fx.js';
 import { Music } from './music.js';
 import { getTheme } from './theme.js';
 import { drawAvatar, defaultAvatar } from './avatar.js';
+import { PERSONA_META } from '../../shared/levels.js';
 import { W, H, renderState, anim, drawBackdrop } from './render-core.js';
 
 const S_winRate = () => renderState.winRate;
@@ -174,6 +175,15 @@ export function drawTable(ctx, S, act) {
     }
   }
 
+  // 关卡：河牌预览（第五张公牌的未来）
+  if (S.riverPreview != null && snap.challenge) {
+    const pvx = boardW0 + 5 * (bw + gap) + 4, pvy = cy - bh / 2 - 6;
+    ctx.globalAlpha = 0.85;
+    drawCard(ctx, pvx, pvy + 10, 32, 44, S.riverPreview, true);
+    ctx.globalAlpha = 1;
+    drawPixelText(ctx, '河牌预览', pvx + 16, pvy - 4, 9, '#ffd76e', 'center');
+  }
+
   // 座位
   const names = snap.seats.filter(s => !s.empty);
   const seatCount = snap.seats.length;
@@ -186,6 +196,16 @@ export function drawTable(ctx, S, act) {
     const dIdx = mySeat >= 0 ? (s.seat - mySeat + seatCount) % seatCount : s.seat % seatCount;
     if (mySeat >= 0 && dIdx === 0) continue; // 自己单独绘制
     drawSeat(ctx, s, seatPos(dIdx, n, false), { plateW, plateH, snap, hand, isWinner: winners.has(s.seat), cx, cy, act, mini, highlight });
+  }
+
+  // 技能「天眼窥牌」：对手被窥视的底牌
+  if (snap.challenge && snap.challenge.peek && snap.challenge.peek.seat !== mySeat) {
+    const pk = snap.challenge.peek;
+    const pp = seatDisplayPos(snap, pk.seat);
+    if (pp) {
+      drawCard(ctx, pp.x + 62, pp.y - 16, 20, 28, pk.card, true);
+      drawPixelText(ctx, '窥', pp.x + 72, pp.y + 17, 9, '#ffd76e', 'center');
+    }
   }
 
   // 底部区：自己（sittingOut 或无筹码时走 spectator，不再画名牌/手牌）
@@ -202,6 +222,18 @@ export function drawTable(ctx, S, act) {
     ? `${snap.code} · 锦标赛Lv${bl.level} ${bl.sb}/${bl.bb} · 升盲${bl.handsLeft}手 · 第${snap.handNo || 0}手`
     : `${snap.code} · ${st.sb}/${st.bb} · 第${snap.handNo || 0}手`;
   drawPixelText(ctx, leftInfo, 16, 14, 14, '#9a92c2');
+  // 挑战关卡 HUD（目标 / 头奖）
+  if (snap.challenge) {
+    const chh = snap.challenge;
+    let goalStr = `🎯 ${chh.goalText}`;
+    if (chh.target > 0) goalStr += `（${chh.count}/${chh.target}）`;
+    drawPixelText(ctx, goalStr, 16, 34, 12, '#ffd76e');
+    if (chh.rule === 'pot_lottery' && !chh.done) {
+      drawPixelText(ctx, chh.handsToJackpot > 0
+        ? `💰 头奖 ${fmt(chh.jackpot)} · ${chh.handsToJackpot} 手后开`
+        : '💰 头奖手！', 16, 52, 12, '#ff9f43');
+    }
+  }
   const mx = W - 16;
   if (textButton(ctx, 'leave2', mx - 52, 16, 13, '退出房间')) act.leave();
   if (textButton(ctx, 'music', mx - 122, 16, 13, Music.enabled ? '音乐:开' : '音乐:关')) act.toggleMusic();
@@ -453,6 +485,10 @@ function drawSeat(ctx, s, pos, o) {
   }
   drawPixelText(ctx, s.name.slice(0, mini ? 4 : 6), nameX, y + 5, mini ? 12 : 13, th.text);
   drawPixelText(ctx, fmt(s.chips), nameX, y + (mini ? 22 : 25), mini ? 12 : 14, th.gold);
+  // 人格标签（挑战关卡：性格即策略）
+  if (s.persona) {
+    drawPixelText(ctx, (PERSONA_META[s.persona] || {}).tag || '', x + plateW - 6, y + 6, 9, '#ffd76e', 'right');
+  }
   // 真人 HUD：VPIP 标签（GG 式数据，10 手起）移入名牌，与筹码同行右对齐
   if (!s.isBot && s.hud) {
     drawPixelText(ctx, 'V' + s.hud.vpip + '%', x + plateW - 6, y + (mini ? 24 : 27), mini ? 9 : 10, th.textFaint, 'right');

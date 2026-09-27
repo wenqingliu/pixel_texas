@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { Room, DEFAULT_SETTINGS } from './room.js';
 import { load, saveSoon, saveNow } from './storage.js';
 import { newlyUnlocked } from '../shared/achievements.js';
+import { LEVELS } from '../shared/levels.js';
 
 const CODE_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 
@@ -239,7 +240,7 @@ export class Lobby {
     const p = this.tokens.get(token);
     if (!p) return null;
     if (p.roomId) this.leaveRoom(token);
-    const room = new Room(this, this.genCode(), token);
+    const room = new Room(this, this.genCode(), token, opts);
     this.rooms.set(room.code, room);
     room.addPlayer(token, p.name, p.avatar);
     if (settings) room.updateSettings(token, settings); // 先设置再入座，买入吃新配置
@@ -247,6 +248,47 @@ export class Lobby {
     p.roomId = room.code;
     this.onRoomsChanged();
     return room;
+  }
+
+  // ── 单机挑战关卡 ───────────────────────────────────
+  startLevel(token, id) {
+    const p = this.tokens.get(token);
+    if (!p) return { ok: false, err: 'no_login' };
+    const idx = LEVELS.findIndex(l => l.id === id);
+    if (idx < 0) return { ok: false, err: 'no_level' };
+    const prog = this.profileOf(token).progress || {};
+    if (idx > 0) {
+      const prev = prog && prog[LEVELS[idx - 1].id];
+      if (!prev || !prev.done) return { ok: false, err: 'locked' };
+    }
+    const room = this.createRoom(token, { ...LEVELS[idx].settings }, { challengeId: id });
+    if (!room) return { ok: false, err: 'create_failed' };
+    room.startGame();
+    return { ok: true, room };
+  }
+
+  // 关卡列表（含进度与解锁状态）
+  sendLevels(token) {
+    const t = this.tokens.get(token);
+    const prog = (t && this.profileOf(token).progress) || {};
+    const list = LEVELS.map((l, i) => {
+      const st = prog[l.id] || {};
+      const locked = i > 0 && !(prog[LEVELS[i - 1].id] && prog[LEVELS[i - 1].id].done);
+      return {
+        id: l.id, name: l.name, chapter: l.chapter, desc: l.desc,
+        goalText: l.goal.text, rule: l.rule,
+        stars: st.stars || 0, done: !!st.done, locked,
+      };
+    });
+    this.sendTo(token, { t: 'levels', levels: list });
+  }
+
+  recordProgress(token, levelId, stars) {
+    const p = this.profileOf(token);
+    if (!p.progress) p.progress = {};
+    const cur = p.progress[levelId] || { done: false, stars: 0 };
+    p.progress[levelId] = { done: true, stars: Math.max(cur.stars, stars) };
+    saveSoon('profiles', this.profiles);
   }
 
   joinRoom(token, code) {

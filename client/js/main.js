@@ -1,6 +1,7 @@
 // 客户端入口：状态管理、网络事件、输入、场景调度
 import { Net } from './net.js';
-import { drawMenu, drawRoomLobby, drawTable, drawConnectOverlay, drawPanels, drawBackdrop, notifyHole, notifyBoard, notifyShowdown, notifyReveal, notifyDeal, resetHandAnim, renderState, betSpotFor, POT_POS, seatDisplayPos, drawToast, notifyEmote, notifyRabbit, addBet, clearBets, syncBets, displayBets, notifyBoardHold } from './render.js';
+import { drawMenu, drawRoomLobby, drawTable, drawConnectOverlay, drawPanels, drawBackdrop, notifyHole, notifyBoard, notifyShowdown, notifyReveal, notifyDeal, resetHandAnim, renderState, betSpotFor, POT_POS, seatDisplayPos, drawToast, notifyEmote, notifyRabbit, addBet, clearBets, syncBets, displayBets, notifyBoardHold, drawLevelWin, drawSkillOffer } from './render.js';
+import { fmt } from './cards.js';
 import { POINTER, resetFrame } from './ui.js';
 import { FX, sfx, confetti, floatText, shake, updateFX, setVolume, flyChips, clickRing } from './fx.js';
 import { Music } from './music.js';
@@ -20,6 +21,10 @@ const S = {
   screen: 'menu',
   snap: null,           // 服务器房间快照
   rooms: [],
+  levels: [],           // 关卡列表（含进度与解锁状态）
+  levelWin: null,       // 过关结算 { levelId, stars }
+  skillOffer: null,     // 技能牌三选一
+  riverPreview: null,   // 河牌预览卡（本手）
   prompt: null,         // {options, deadline}
   myCards: null,
   breakReadySelf: false, // 休息倒计时中已点「继续」（本地标记，不上行）
@@ -165,6 +170,9 @@ function onMsg(m) {
       if (m.avatar && validAvatar(m.avatar)) { S.avatar = m.avatar; localStorage.setItem('pt_avatar', m.avatar); }
       net.send({ t: 'set_avatar', avatar: S.avatar }); // 同步本地头像
       break;
+    case 'levels':
+      S.levels = m.levels || [];
+      break;
     case 'profile':
       S.profile = m.profile;
       if (m.profile.name) S.nameInput = m.profile.name;
@@ -261,6 +269,7 @@ function handleEv(ev) {
       S.myCards = null;
       S.preAction = null; // 新手牌清空上一手可能遗留的预操作
       S.breakReadySelf = false;
+      S.riverPreview = null;
       lastHandNo = ev.handNo;
       seqPush(() => { resetHandAnim(); clearBets(); notifyDeal(); sfx.deal(); }, 0);
       break;
@@ -380,6 +389,26 @@ function handleEv(ev) {
       sfx.win();
       break;
     }
+    case 'river_preview':
+      S.riverPreview = m.card;
+      break;
+    case 'skill_offer':
+      S.skillOffer = m.choices || [];
+      break;
+    case 'skill_picked':
+      S.skillOffer = null;
+      break;
+    case 'level_win':
+      S.levelWin = { levelId: m.levelId, stars: m.stars };
+      sfx.win();
+      break;
+    case 'jackpot_win': {
+      toast(`💰 ${m.name} 赢得头奖 ${fmt(m.amount)}！`);
+      const jp = seatPos(m.seat);
+      if (jp) confetti(jp.x, jp.y, 30);
+      sfx.win();
+      break;
+    }
     case 'rabbit':
       seqPush(() => { notifyRabbit(ev.cards); sfx.street(); }, 500);
       break;
@@ -432,6 +461,10 @@ function buildTimeline(rec) {
 
 const act = {
   practice: () => { net.send({ t: 'practice' }); syncDomMode('name'); S.joinOpen = false; },
+  openLevels: () => { S.panel = 'levels'; net.send({ t: 'get_levels' }); },
+  startLevel: (id) => { net.send({ t: 'start_level', id }); S.panel = null; },
+  pickSkill: (id) => { net.send({ t: 'pick_skill', id }); S.skillOffer = null; },
+  challengeFree: () => { net.send({ t: 'challenge_free' }); S.levelWin = null; },
   quickMatch: () => net.send({ t: 'quick_match' }),
   createRoom: () => net.send({ t: 'create_room' }),
   toggleJoin: () => {
@@ -598,7 +631,7 @@ function tick(now) {
     if (!S.connected) {
       drawConnectOverlay(ctx, '正在连接服务器…');
     } else if (S.screen === 'menu' || !S.snap) {
-      if (S.panel === 'profile' || S.panel === 'rooms') {
+      if (S.panel === 'profile' || S.panel === 'rooms' || S.panel === 'levels') {
         drawBackdrop(ctx);
         drawPanels(ctx, S, act);
       } else {
@@ -609,6 +642,8 @@ function tick(now) {
     } else {
       drawTable(ctx, S, act);
       drawPanels(ctx, S, act);
+      if (S.skillOffer) drawSkillOffer(ctx, S, act);
+      if (S.levelWin) drawLevelWin(ctx, S, act);
     }
 
     // All-in 全屏闪光

@@ -13,4 +13,4 @@ export {
 } from './render-core.js';
 export { drawMenu, drawRoomLobby } from './render-menu.js';
 export { drawTable, seatDisplayPos, betSpotFor, POT_POS } from './render-table.js';
-export { drawPanels } from './render-panels.js';
+export { drawPanels, drawLevelsPanel, drawLevelWin, drawSkillOffer } from './render-panels.js';

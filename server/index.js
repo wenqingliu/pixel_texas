@@ -131,6 +131,15 @@ wss.on('connection', (ws) => {
           if (!r.ok) lobby.sendTo(token, { t: 'error', msg: ERR_TEXT[r.err] || r.err });
           return;
         }
+        case 'get_levels': {
+          if (token) lobby.sendLevels(token);
+          return;
+        }
+        case 'start_level': {
+          const r = lobby.startLevel(token, msg.id);
+          if (!r.ok) lobby.sendTo(token, { t: 'error', msg: ERR_TEXT[r.err] || (r.err === 'locked' ? '先通过前一关才能解锁' : '无法开始关卡') });
+          return;
+        }
         case 'quick_tournament': {
           const r = lobby.quickTournament(token);
           if (!r.ok) lobby.sendTo(token, { t: 'error', msg: ERR_TEXT[r.err] || r.err });
@@ -184,6 +193,15 @@ wss.on('connection', (ws) => {
         case 'ready_next': {
           // 两局之间点「继续」：全员就绪提前开局；不在休息期则静默忽略
           room.readyNext(token);
+          return;
+        }
+        case 'challenge_free': {
+          room.challengeFree();
+          return;
+        }
+        case 'pick_skill': {
+          const r = room.pickSkill(token, msg.id);
+          if (!r.ok) lobby.sendTo(token, { t: 'error', msg: '无法选择技能牌' });
           return;
         }
         case 'runout_fast': {

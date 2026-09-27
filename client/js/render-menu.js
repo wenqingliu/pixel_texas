@@ -56,11 +56,12 @@ export function drawMenu(ctx, S, act) {
   // 主按钮列
   const bx = W / 2 - 120, bw = 240, bh = 42;
   const menuBtns = [
-    ['practice', 246, '单机练习', { fill: '#7a3b12', border: th.accent, color: '#ffe3b3', size: 16 }, () => act.practice()],
-    ['quick', 294, '快速匹配', { size: 16 }, () => act.quickMatch()],
-    ['tourney', 342, '快速锦标赛', { fill: '#4a1f5c', border: '#c07bee', color: '#ecd1ff', size: 16 }, () => act.quickTournament()],
-    ['create', 390, '创建房间', { size: 16 }, () => act.createRoom()],
-    ['rooms', 438, '房间大厅', { size: 16 }, () => act.openRooms()],
+    ['levels', 236, '挑战关卡', { fill: '#5c4a1a', border: '#ffd76e', color: '#fff3c4', size: 16 }, () => act.openLevels()],
+    ['practice', 282, '单机练习', { fill: '#7a3b12', border: th.accent, color: '#ffe3b3', size: 16 }, () => act.practice()],
+    ['quick', 328, '快速匹配', { size: 16 }, () => act.quickMatch()],
+    ['tourney', 374, '快速锦标赛', { fill: '#4a1f5c', border: '#c07bee', color: '#ecd1ff', size: 16 }, () => act.quickTournament()],
+    ['create', 420, '创建房间', { size: 16 }, () => act.createRoom()],
+    ['rooms', 466, '房间大厅', { size: 16 }, () => act.openRooms()],
   ];
   menuBtns.forEach(([id, by, label, opts, fn], i) => {
     const k = menuK(S, 0.12 + i * 0.06);

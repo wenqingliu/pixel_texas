@@ -2,6 +2,7 @@
 import { Hand } from './hand.js';
 import { scoreName, eval7 } from './evaluator.js';
 import { botDecide, BOT_NAMES, LEVEL_NAMES } from './bots/bot.js';
+import { LEVELS, SKILL_CARDS, levelStars } from '../shared/levels.js';
 
 export const DEFAULT_SETTINGS = { maxSeats: 6, sb: 10, bb: 20, buyIn: 2000, botsFill: true, botLevel: 'normal', mode: 'cash', blindsEvery: 8, actionTime: 30, breakWait: 8, aiStandIn: false };
 export const BUYIN_OPTIONS = [1000, 2000, 5000, 10000];
@@ -29,7 +30,7 @@ export const TIMING = { ACTION_TIME, BOT_THINK, HAND_BREAK, RUNOUT_STEP, ROOM_ID
 const CLIENT_EV_SKIP = new Set(['hole', 'action_required', 'hand_stats', 'runout', 'hand_break']);
 
 export class Room {
-  constructor(lobby, code, hostToken) {
+  constructor(lobby, code, hostToken, opts = {}) {
     this.lobby = lobby;
     this.code = code;
     this.settings = { ...DEFAULT_SETTINGS };
@@ -61,6 +62,21 @@ export class Room {
     this.tourLevel = 0;         // 盲注级别索引
     this.levelStartHand = 0;    // 当前级别起始手数
     this._rec = null;           // 当前手牌记录
+    // 单机挑战关卡（opts.challengeId 由大厅 startLevel 传入）
+    if (opts.challengeId) {
+      const def = LEVELS.find(l => l.id === opts.challengeId);
+      this.challenge = {
+        id: def.id, def,
+        token: hostToken,
+        count: 0,
+        jackpot: def.settings.bb * 5,
+        jackpotHandNo: 5 + Math.floor(Math.random() * 11), // 5~15 手之间爆
+        skill: null, skillOffered: false,
+        peek: null,
+        jackpotWon: false,
+        done: false, free: false,
+      };
+    } else this.challenge = null;
   }
 
   // ── 计时器 ─────────────────────────────────────────
@@ -191,13 +207,16 @@ export class Room {
     if (this.settings.mode === 'tournament' && (this.handNo > 0 || this.hand)) return;
     const used = new Set(this.seats.filter(Boolean).map(s => s.name));
     const pool = BOT_NAMES.filter(n => !used.has(n));
-    let pi = 0;
+    const personas = this.challenge && this.challenge.def.personas || null;
+    let botIdx = this.seats.filter(s => s && s.isBot).length;
     for (let i = 0; i < this.settings.maxSeats; i++) {
       if (!this.seats[i]) {
+        const pIdx = botIdx++;
         this.seats[i] = {
-          seat: i, token: null, name: pool[pi++ % pool.length] || ('机器人' + i),
+          seat: i, token: null, name: pool[pIdx % pool.length] || ('机器人' + i),
           chips: this.settings.buyIn, isBot: true, level: this.settings.botLevel, sittingOut: false,
           avatar: 'p' + (1 + Math.floor(Math.random() * 12)) + '.c' + (1 + Math.floor(Math.random() * 8)),
+          persona: personas ? personas[pIdx % personas.length] : null,
         };
       } else if (this.seats[i].isBot) {
         const b = this.seats[i];
@@ -235,6 +254,14 @@ export class Room {
       this.phase = 'lobby';
       return { ok: false, err: 'need_two_players' };
     }
+    // 技能牌关：先三选一，选完再开局
+    if (this.challenge && this.challenge.def.skillOffer && !this.challenge.skillOffered) {
+      this.challenge.skillOffered = true;
+      const choices = [...SKILL_CARDS].sort(() => Math.random() - 0.5).slice(0, 3)
+        .map(c => ({ id: c.id, icon: c.icon, name: c.name, desc: c.desc }));
+      this.lobby.sendTo(this.challenge.token, { t: 'ev', kind: 'skill_offer', choices });
+      return { ok: true };
+    }
     this.startHand();
     return { ok: true };
   }
@@ -261,6 +288,7 @@ export class Room {
   maybeAutoNext() {
     if (this.phase !== 'playing' || this.closed) return;
     if (this.breakDeadline) return; // 休息倒计时期间由倒计时/就绪推进，避免抢跑
+    if (this.challenge && this.challenge.done && !this.challenge.free) return; // 过关冻结
     if (this.hand && this.hand.phase !== 'done') return;
     if (this.eligibleSeats().length >= 2) {
       this.addTimer(() => {
@@ -274,6 +302,7 @@ export class Room {
     this.breakDeadline = 0;
     this.runoutFast = false;
     if (this.closed || this.phase !== 'playing') return;
+    if (this.challenge && this.challenge.done && !this.challenge.free) return; // 过关冻结
     if (this.hand && this.hand.phase !== 'done') return;
     this.cleanupAfterHand();
     this.fillBots();
@@ -289,14 +318,41 @@ export class Room {
       this.broadcast({ t: 'ev', kind: 'blinds_up', level: b.level, sb: b.sb, bb: b.bb });
     }
     const bl = this.currentBlinds();
+    // 底池彩票：头奖随手数增长
+    if (this.challenge && this.challenge.def.rule === 'pot_lottery' && !this.challenge.done) {
+      this.challenge.jackpot += bl.bb * 2;
+    }
 
     // 按钮轮转到下一个有筹码的座位
     this.button = this._nextEligibleSeat(this.button);
     this.handNo++;
-    const hand = new Hand(eligible, { sb: bl.sb, bb: bl.bb, button: this.button, handNo: this.handNo }, ev => this._onHandEvent(ev));
+    // 挑战规则注入本手
+    const ch = this.challenge;
+    const humanSeat = ch ? ((this.players.get(ch.token) || {}).seat ?? -1) : null;
+    const hand = new Hand(eligible, {
+      sb: bl.sb, bb: bl.bb, button: this.button, handNo: this.handNo,
+      riverPreview: !!(ch && ch.def.rule === 'river_preview'),
+      openHand: !!(ch && ch.def.rule === 'open_hand' && this.handNo % 4 === 0),
+      raiseQuota: !!(ch && ch.def.rule === 'raise_quota'),
+      foldRefundSeat: ch && ch.skill === 'fold_refund' ? humanSeat : null,
+      splitBiasSeat: ch && ch.skill === 'split_bias' ? humanSeat : null,
+    }, ev => this._onHandEvent(ev));
     this.hand = hand;
     this.lastResults = null;
     hand.start();
+    // 关卡：河牌预览是公开信息，广播全桌
+    if (ch && ch.def.rule === 'river_preview' && hand.riverFixed != null) {
+      this.broadcast({ t: 'ev', kind: 'river_preview', card: hand.riverFixed });
+    }
+    // 技能「天眼窥牌」：每手偷看一张对手底牌（私发）
+    if (ch && ch.skill === 'peek_card') {
+      const opps = hand.players.filter(p3 => p3.token === null && p3.seat !== humanSeat);
+      if (opps.length && humanSeat != null && humanSeat >= 0) {
+        const target = opps[Math.floor(Math.random() * opps.length)];
+        ch.peek = { handNo: this.handNo, seat: target.seat, card: target.cards[0] };
+        this.lobby.sendTo(ch.token, { t: 'ev', kind: 'peek', handNo: this.handNo, seat: target.seat, card: target.cards[0] });
+      }
+    }
   }
 
   _nextEligibleSeat(from) {
@@ -426,6 +482,28 @@ export class Room {
         const st2 = this.stats.get(w2.name);
         if (st2) { st2.shownCat = r.score >> 20; st2.shownAt = this.handNo; }
       }
+      // 挑战关卡：目标计数 + 头奖爆奖
+      if (this.challenge && !this.challenge.done) {
+        const ch2 = this.challenge;
+        const human = this.hand.players.find(p3 => p3.token === ch2.token);
+        const g = ch2.def.goal;
+        if (human && ev.results.some(r => r.seat === human.seat && r.win > 0)) {
+          if (g.type === 'showdown_win_vs') {
+            const vsPersona = this.hand.players.filter(p3 => !p3.folded).some(p3 => p3.persona === g.persona);
+            if (vsPersona) ch2.count++;
+          } else if (g.type === 'showdown_win') {
+            ch2.count++;
+          }
+        }
+        if (ch2.def.rule === 'pot_lottery' && this.handNo === ch2.jackpotHandNo && ev.results.length) {
+          const top = ev.results.reduce((a, b) => (b.win > a.win ? b : a));
+          const w3 = this.hand.bySeat(top.seat);
+          w3.chips += ch2.jackpot;
+          if (human && top.seat === human.seat) ch2.jackpotWon = true;
+          this.broadcast({ t: 'ev', kind: 'jackpot_win', seat: top.seat, name: w3.name, amount: ch2.jackpot });
+          ch2.jackpot = 0;
+        }
+      }
       // 手牌流水归档（回放用）
       if (this._rec) {
         this._rec.results = ev.results;
@@ -495,8 +573,46 @@ export class Room {
       this.lobby.onRoomsChanged();
       return;
     }
+    // 挑战关卡：目标达成判定
+    if (this.challenge && !this.challenge.done) {
+      const ch2 = this.challenge;
+      const g = ch2.def.goal;
+      const pl = this.players.get(ch2.token);
+      const s2 = pl && pl.seat >= 0 ? this.seats[pl.seat] : null;
+      const chipsBB = s2 ? s2.chips / this.settings.bb : 0;
+      let win = false;
+      if (g.type === 'chips' && chipsBB >= g.bb) win = true;
+      if (g.type === 'showdown_win_vs' && ch2.count >= g.target) win = true;
+      if (g.type === 'showdown_win' && ch2.count >= g.target) win = true;
+      if (g.type === 'jackpot_win' && ch2.jackpotWon) win = true;
+      if (win) {
+        ch2.done = true;
+        const stars = levelStars(ch2.def, { chipsBB, count: ch2.count });
+        this.lobby.recordProgress(ch2.token, ch2.id, stars);
+        this.broadcast({ t: 'ev', kind: 'level_win', levelId: ch2.id, stars });
+      }
+    }
+    if (this.challenge && this.challenge.done && !this.challenge.free) return; // 过关冻结，等玩家选择
     if (this.eligibleSeats().length >= 2) this.startBreak();
     this.lobby.onRoomsChanged();
+  }
+
+  // 挑战关卡：技能三选一
+  pickSkill(token, id) {
+    if (!this.challenge || token !== this.challenge.token) return { ok: false, err: 'no_challenge' };
+    if (!SKILL_CARDS.some(c => c.id === id)) return { ok: false, err: 'bad_skill' };
+    this.challenge.skill = id;
+    this.broadcast({ t: 'ev', kind: 'skill_picked', id });
+    this.startHand();
+    return { ok: true };
+  }
+
+  // 挑战关卡：过关后选择自由继续打
+  challengeFree() {
+    if (!this.challenge) return { ok: false, err: 'no_challenge' };
+    this.challenge.free = true;
+    this.maybeAutoNext();
+    return { ok: true };
   }
 
   // ── 两局之间：休息倒计时 ────────────────────────────
@@ -700,6 +816,7 @@ export class Room {
       const out = {
         seat: i, name: s.name, chips: s.chips, isBot: s.isBot,
         level: s.isBot ? s.level : undefined,
+        persona: s.persona || null,
         connected: s.token ? !!(p && p.connected) : true,
         sittingOut: !!s.sittingOut,
         eliminated: !!s.eliminated,
@@ -741,6 +858,23 @@ export class Room {
         deadline: this.actorDeadline || 0, // 当前行动窗口（人类），全桌可见
       } : null,
       lastResults: this.lastResults,
+      challenge: this.challenge ? {
+        id: this.challenge.id,
+        name: this.challenge.def.name,
+        goalText: this.challenge.def.goal.text,
+        rule: this.challenge.def.rule,
+        count: this.challenge.count,
+        target: this.challenge.def.goal.target || 0,
+        jackpot: this.challenge.jackpot,
+        handsToJackpot: this.challenge.def.rule === 'pot_lottery'
+          ? Math.max(0, this.challenge.jackpotHandNo - this.handNo) : 0,
+        skill: this.challenge.skill,
+        done: this.challenge.done,
+        free: this.challenge.free,
+        // 窥牌只有挑战者自己可见
+        peek: (forToken === this.challenge.token && this.challenge.peek
+          && this.challenge.peek.handNo === this.handNo) ? this.challenge.peek : null,
+      } : null,
       blinds: this.settings.mode === 'tournament' ? this.currentBlinds() : null,
       tournamentOver: this.tournamentOver,
       break: this.breakDeadline ? {

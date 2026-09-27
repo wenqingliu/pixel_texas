@@ -130,6 +130,29 @@ export function botDecide(p, hand, reads = null) {
   // 所有档位通用：免费牌永远看
   if (toCall === 0 && !o.canRaise) return { type: 'check' };
 
+  // ── 人格覆盖（挑战关卡）：性格即策略，亮在性格卡上就真这么打 ──
+  if (p.persona === 'station') {
+    // 跟注站：翻牌后任何下注都跟，直到全下
+    if (street !== 'preflop' && toCall > 0) return { type: 'call' };
+    if (street !== 'preflop') return o.canRaise && eq > 0.75 && r < 0.5 ? raiseTo(Math.max(bb * 2, pot * 0.5)) : { type: 'check' };
+    if (toCall > 0 && o.canCall && toCall <= bb * 8) return { type: 'call' }; // 翻牌前小注全跟
+    if (toCall > 0) return { type: 'fold' };                                  // 只有超大 all-in 才认怂
+    return o.canRaise && eq > 0.7 && r < 0.4 ? raiseTo(Math.max(bb * 2, pot * 0.4)) : { type: 'check' };
+  }
+  if (p.persona === 'maniac') {
+    // 疯子：七成手牌直接加注，什么底牌都打
+    if (r < 0.72 && o.canRaise) return raiseTo(Math.max(bb * 2.5, pot * (0.8 + r * 0.6)));
+    if (toCall > 0) return o.canCall ? { type: 'call' } : { type: 'fold' };
+    return { type: 'check' };
+  }
+  if (p.persona === 'rock') {
+    // 磐石：只玩强牌，被下注就走
+    const strong = eq > 0.55 || (street === 'preflop' && edge > 1.6);
+    if (toCall > 0) return strong && edge > 1 + potOdds ? { type: 'call' } : { type: 'fold' };
+    if (strong && o.canRaise && r < 0.6) return raiseTo(Math.max(bb * 2, pot * 0.5));
+    return { type: 'check' };
+  }
+
   const raiseTo = (x) => {
     let to = Math.round(x);
     to = Math.max(to, o.minRaiseTo);

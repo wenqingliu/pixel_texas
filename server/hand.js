@@ -30,9 +30,16 @@ export class Hand {
     this.currentBet = 0;
     this.minIncrement = opts.bb;
     this._deck = shuffle(newDeck());
+    // 挑战规则钩子（Room 按关卡传入）
+    this.riverPreview = !!opts.riverPreview;            // 发牌时亮出未来河牌
+    this.openHand = !!opts.openHand;                    // 全场明牌
+    this.raiseQuota = !!opts.raiseQuota;                // 每街限一次加注
+    this.foldRefundSeat = opts.foldRefundSeat ?? null;  // 技能：翻牌前弃牌退款（座位号）
+    this.splitBiasSeat = opts.splitBiasSeat ?? null;    // 技能：平分底池归奇（座位号）
     this._order = [...players].sort((a, b) => a.seat - b.seat); // 座位号升序，环形推进
     for (const p of players) {
       p.cards = [this._deck.pop(), this._deck.pop()];
+      p.streetRaised = false;
       p.commitTotal = 0;
       p.streetCommit = 0;
       p.folded = false;
@@ -51,6 +58,8 @@ export class Hand {
       p.facedBet = false;        // 本手曾面对下注（被注）
       p.foldedFacingBet = false; // 面对下注时弃牌
     }
+    // 河牌预览：这张牌就是本手注定打出的河牌（从牌堆尾预支，发牌次序公平不变）
+    if (this.riverPreview) this.riverFixed = this._deck.pop();
   }
 
   bySeat(seat) { return this.players.find(p => p.seat === seat); }
@@ -88,7 +97,14 @@ export class Hand {
     this.minIncrement = this.bb;
 
     this.emit({ kind: 'hole' }); // Room 据此向各玩家私发底牌
+    if (this.openHand) this._revealAll('open'); // 明牌手：全场亮底牌
     this._startBettingRound(true);
+  }
+
+  // 公牌摸牌：河牌预览规则下，第五张用开局亮出的固定河牌
+  _drawBoardCard() {
+    if (this.riverPreview && this.board.length === 4) return this.riverFixed;
+    return this._deck.pop();
   }
 
   _postBlind(p, amount) {
@@ -106,8 +122,8 @@ export class Hand {
     if (!isPreflop) {
       const need = this.board.length < 3 ? 3 : this.board.length + 1;
       this.street = STREET_BY_BOARD[need];
-      while (this.board.length < need) this.board.push(this._deck.pop());
-      for (const p of this.players) { p.acted = false; p.streetCommit = 0; }
+      while (this.board.length < need) this.board.push(this._drawBoardCard());
+      for (const p of this.players) { p.acted = false; p.streetCommit = 0; p.streetRaised = false; }
       this.currentBet = 0;
       this.minIncrement = this.bb;
       this.emit({ kind: 'street', street: this.street, cards: [...this.board] });
@@ -143,7 +159,7 @@ export class Hand {
       canCheck: toCall === 0,
       canCall: toCall > 0 && p.chips >= toCall,
       callAmount: toCall,
-      canRaise: p.chips > toCall,
+      canRaise: p.chips > toCall && (!this.raiseQuota || !p.streetRaised),
       minRaiseTo: Math.min(this.currentBet + this.minIncrement, p.streetCommit + p.chips),
       maxRaiseTo: p.streetCommit + p.chips,
       pot: this.commitTotalSum(),
@@ -164,6 +180,13 @@ export class Hand {
     if (type === 'fold') {
       p.folded = true;
       if (toCall > 0) p.foldedFacingBet = true;
+      // 技能「退款保险」：翻牌前弃牌返还已投入盲注（从底池退回，筹码守恒不变）
+      if (this.foldRefundSeat === seat && this.street === 'preflop' && !p.allIn && p.commitTotal > 0) {
+        p.chips += p.commitTotal;
+        p.commitTotal = 0;
+        p.streetCommit = 0;
+        ev.refund = true;
+      }
     } else if (type === 'check') {
       if (toCall > 0) { p._awaiting = true; return { ok: false, err: 'cannot_check' }; }
     } else if (type === 'call') {
@@ -175,6 +198,7 @@ export class Hand {
       p.calls++;
       if (this.street === 'preflop') p.vpip = true; // 翻牌前 call 即主动投入（盲注非 call 动作）
     } else if (type === 'raise') {
+      if (this.raiseQuota && p.streetRaised) { p._awaiting = true; return { ok: false, err: 'raise_quota' }; }
       const maxTo = p.streetCommit + p.chips;
       let raiseTo = Math.floor(Number(amount));
       if (!Number.isFinite(raiseTo)) { p._awaiting = true; return { ok: false, err: 'bad_amount' }; }
@@ -189,6 +213,7 @@ export class Hand {
       this._commit(p, raiseTo - p.streetCommit);
       const wentAllIn = p.chips === 0;
       if (wentAllIn) p.allIn = true;
+      p.streetRaised = true; // 加注配给：本街已用掉唯一一次加注
       if (raiseTo > this.currentBet) {
         const prevBet = this.currentBet;
         this.currentBet = raiseTo;
@@ -215,14 +240,14 @@ export class Hand {
     const alive = this.alive();
     if (alive.length === 1) {
       this._awardUncontested(alive[0]);
-      return { ok: true };
+      return { ok: true, refund: ev.refund === true };
     }
     if (this._roundComplete()) {
       this._onRoundEnd();
     } else {
       this._advanceActor(seat);
     }
-    return { ok: true };
+    return { ok: true, refund: ev.refund === true };
   }
 
   _commit(p, amount) {
@@ -274,7 +299,7 @@ export class Hand {
     if (this.phase !== 'runout') return false;
     if (this.board.length < 5) {
       const need = this.board.length < 3 ? 3 : this.board.length + 1;
-      while (this.board.length < need) this.board.push(this._deck.pop());
+      while (this.board.length < need) this.board.push(this._drawBoardCard());
       this.street = STREET_BY_BOARD[this.board.length];
       this.emit({ kind: 'street', street: this.street, cards: [...this.board] });
       return true;
@@ -380,7 +405,12 @@ export class Hand {
       }
       const share = Math.floor(pot.amount / winners.length);
       let odd = pot.amount - share * winners.length;
-      const ordered = [...winners].sort((x, y) => this._distFromButton(x.seat) - this._distFromButton(y.seat));
+      let ordered = [...winners].sort((x, y) => this._distFromButton(x.seat) - this._distFromButton(y.seat));
+      // 技能「平分优势」：奇数筹码优先分给指定玩家
+      if (this.splitBiasSeat != null) {
+        const hi = ordered.findIndex(w => w.seat === this.splitBiasSeat);
+        if (hi > 0) { const [w] = ordered.splice(hi, 1); ordered.unshift(w); }
+      }
       for (const w of ordered) {
         let gain = share;
         if (odd > 0) { gain += 1; odd--; }

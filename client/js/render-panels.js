@@ -30,6 +30,37 @@ export function drawPanels(ctx, S, act) {
   else if (S.panel === 'replay' && S.replay) drawReplayPanel(ctx, S, act);
   else if (S.panel === 'profile') drawProfilePanel(ctx, S, act);
   else if (S.panel === 'rooms') drawRoomsPanel(ctx, S, act);
+  else if (S.panel === 'levels') drawLevelsPanel(ctx, S, act);
+}
+
+// ── 挑战关卡选择（二级界面）─────────────────────────
+export function drawLevelsPanel(ctx, S, act) {
+  const th = getTheme();
+  const f = panelFrame(ctx, '挑战关卡', 720, 490);
+  if (!f) { act.closePanel(); return; }
+  if (!S.levels.length) drawPixelText(ctx, '正在载入关卡…', f.x + 24, f.y + 60, 13, th.textFaint);
+  let chapter = '';
+  let y = f.y + 46;
+  S.levels.forEach((l) => {
+    if (l.chapter !== chapter) {
+      chapter = l.chapter;
+      drawPixelText(ctx, chapter, f.x + 24, y, 12, th.textDim);
+      y += 22;
+    }
+    const locked = l.locked;
+    if (button(ctx, 'lv' + l.id, f.x + 24, y, f.w - 48, 64, '', {
+      fill: locked ? th.panelDim : th.panel,
+      border: locked ? th.panelBorder : (l.done ? th.ok : undefined),
+      disabled: locked,
+    })) act.startLevel(l.id);
+    drawPixelText(ctx, l.name, f.x + 40, y + 8, 15, locked ? th.textFaint : th.text);
+    for (let s = 0; s < 3; s++) {
+      drawPixelText(ctx, s < l.stars ? '★' : '☆', f.x + f.w - 106 + s * 20, y + 8, 14, s < l.stars ? '#ffd76e' : '#3a3560');
+    }
+    drawPixelText(ctx, locked ? '🔒 通过上一关解锁' : (l.done ? '已通关 · ' : '') + l.goalText, f.x + 40, y + 28, 11, locked ? th.textFaint : '#ffd76e');
+    drawPixelText(ctx, l.desc.slice(0, 34), f.x + 40, y + 46, 10, th.textFaint);
+    y += 70;
+  });
 }
 
 // ── 房间大厅（二级界面）：房间码加入 + 公开房间列表 ──
@@ -322,4 +353,62 @@ function drawReplayPanel(ctx, S, act) {
 
 function streetName(s) {
   return { preflop: '翻牌前', flop: '翻牌', turn: '转牌', river: '河牌' }[s] || s;
+}
+
+// ── 过关结算 ────────────────────────────────────────
+export function drawLevelWin(ctx, S, act) {
+  const lw = S.levelWin;
+  if (!lw) return;
+  const th = getTheme();
+  ctx.fillStyle = 'rgba(8, 6, 20, 0.86)';
+  ctx.fillRect(0, 0, W, H);
+  const w = 460, h = 250, x = W / 2 - w / 2, y = H / 2 - h / 2 - 16;
+  ctx.fillStyle = th.panel;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#ffd76e';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
+  drawPixelText(ctx, '关卡完成', x + w / 2, y + 26, 26, '#ffd76e', 'center', '#0c0a18');
+  drawPixelText(ctx, '★'.repeat(lw.stars) + '☆'.repeat(3 - lw.stars), x + w / 2, y + 68, 34, '#ffd76e', 'center');
+  const idx = S.levels.findIndex(l => l.id === lw.levelId);
+  const next = S.levels[idx + 1];
+  const name = S.levels[idx] ? S.levels[idx].name : '';
+  drawPixelText(ctx, `「${name}」通关！`, x + w / 2, y + 116, 14, th.text, 'center');
+  if (button(ctx, 'lwNext', x + 40, y + 148, 180, 44, next ? '下一关 ▸' : '返回菜单', { fill: '#1e4433', border: '#66bb6a', color: '#c8f5d0', size: 15 })) {
+    S.levelWin = null;
+    if (next) act.startLevel(next.id);
+    else act.leave();
+  }
+  if (button(ctx, 'lwFree', x + 240, y + 148, 180, 44, '自由继续', { size: 15, fill: '#1f1b38' })) {
+    act.challengeFree();
+  }
+  if (button(ctx, 'lwLeave', x + w / 2 - 90, y + 202, 180, 30, '返回大厅', { size: 12, fill: '#2b1a2e' })) {
+    S.levelWin = null;
+    act.leave();
+  }
+}
+
+// ── 技能牌三选一 ────────────────────────────────────
+export function drawSkillOffer(ctx, S, act) {
+  const th = getTheme();
+  ctx.fillStyle = 'rgba(8, 6, 20, 0.88)';
+  ctx.fillRect(0, 0, W, H);
+  drawPixelText(ctx, '选择一张技能牌', W / 2, 116, 22, '#ffd76e', 'center', '#0c0a18');
+  drawPixelText(ctx, '它将在本关全程生效', W / 2, 148, 13, th.textDim, 'center');
+  S.skillOffer.forEach((c, i) => {
+    const cw = 200, chh = 220, x = W / 2 + (i - 1) * 230 - cw / 2, y = 186;
+    ctx.fillStyle = '#181334';
+    ctx.fillRect(x, y, cw, chh);
+    ctx.strokeStyle = '#ffd76e';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 1, y + 1, cw - 2, chh - 2);
+    ctx.font = '40px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(c.icon, x + cw / 2, y + 48);
+    drawPixelText(ctx, c.name, x + cw / 2, y + 88, 17, '#ffd76e', 'center');
+    drawPixelText(ctx, c.desc.slice(0, 10), x + cw / 2, y + 122, 12, th.text, 'center');
+    if (c.desc.length > 10) drawPixelText(ctx, c.desc.slice(10, 20), x + cw / 2, y + 140, 12, th.text, 'center');
+    if (button(ctx, 'skill' + c.id, x + 40, y + 168, 120, 32, '选它', { fill: '#1e4433', border: '#66bb6a', size: 13 })) act.pickSkill(c.id);
+  });
 }

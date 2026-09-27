@@ -8,6 +8,8 @@ process.env.PT_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'pt-lobby-test-'
 
 const { Room, DEFAULT_SETTINGS } = await import('../server/room.js');
 
+class FakeWS { constructor() { this.readyState = 1; this.inbox = []; } send() {} close() { this.readyState = 3; } }
+
 let fails = 0;
 function assert(cond, msg) {
   if (!cond) { fails++; console.error('  ✗ ' + msg); }
@@ -43,7 +45,6 @@ function assert(cond, msg) {
 
 // ── 档案/会话过期清理 ────────────────────────────────
 {
-  class FakeWS { constructor() { this.readyState = 1; this.inbox = []; } send() {} close() { this.readyState = 3; } }
   const { Lobby } = await import('../server/lobby.js');
   const now = Date.now();
   const lobby = new Lobby();
@@ -136,6 +137,7 @@ function assert(cond, msg) {
 
 // ── 成就：解锁判定 + 连击计数 ────────────────────────
 {
+  const { Lobby } = await import('../server/lobby.js');
   const lobby3 = new Lobby();
   const tokenA = lobby3.login(new FakeWS(), '成就侠', null);
   const royal = (8 << 20) | (12 << 16);
@@ -151,6 +153,74 @@ function assert(cond, msg) {
   assert(unlocked.includes('rock'), '连续 10 手未入池解锁超紧岩石');
   const view = lobby3.profileView(tokenA);
   assert(Array.isArray(view.achievements) && view.achievements.length >= 3, 'profileView 带成就列表');
+}
+
+// ── 挑战关卡：解锁 / 人格注入 / 目标判定 / 规则钩子 ──
+{
+  const { Lobby } = await import('../server/lobby.js');
+  const lobby4 = new Lobby();
+  const tokenA = lobby4.login(new FakeWS(), '挑战者', null);
+  // 未解锁的第二关直接被拒
+  const r2 = lobby4.startLevel(tokenA, 'l2_river');
+  assert(r2.ok === false && r2.err === 'locked', '未解锁关卡被拒');
+  // 开始第一关 → 挑战模式 + 人格注入 + 自动开局
+  const r1 = lobby4.startLevel(tokenA, 'l1_faces');
+  assert(r1.ok && r1.room.challenge && r1.room.challenge.id === 'l1_faces', '关卡房间创建');
+  const room1 = r1.room;
+  assert(room1.phase === 'playing' && room1.hand, '关卡自动开局');
+  assert(room1.seats.filter(s => s && s.persona === 'station').length >= 1, '跟注站人格注入');
+  const snapA = room1.snapshot(tokenA);
+  assert(snapA.challenge && snapA.challenge.goalText.includes('跟注站'), '快照带挑战信息');
+  // 模拟对跟注站赢 3 次摊牌 → 过关 + 进度记录 + 冻结
+  room1.challenge.count = 3;
+  if (room1.hand) room1.hand.phase = 'done';
+  room1._afterHand();
+  assert(room1.challenge.done, '目标达成 → 过关');
+  assert(lobby4.profileOf(tokenA).progress.l1_faces.done, '进度已记录');
+  assert(room1.hand === null, '过关后冻结，不再自动开局');
+  room1.close();
+  // 通关后第二关解锁
+  const r3 = lobby4.startLevel(tokenA, 'l2_river');
+  assert(r3.ok, '通关后第二关解锁');
+  r3.room.close();
+
+  // 规则钩子：河牌预览确定性（第五张公牌 === 开局亮出的卡）
+  const { Hand } = await import('../server/hand.js');
+  const players = [
+    { seat: 0, name: 'A', chips: 1000, token: 't' },
+    { seat: 1, name: 'B', chips: 1000, isBot: true },
+  ];
+  const hand = new Hand(players, { sb: 10, bb: 20, button: 0, handNo: 1, riverPreview: true }, () => {});
+  hand.phase = 'runout';
+  let guard = 0;
+  while (hand.board.length < 5 && guard++ < 10) hand.advanceRunout();
+  assert(hand.board[4] === hand.riverFixed, '河牌预览卡与实际河牌一致');
+  // 规则钩子：加注配给——用尽后 options 拒绝加注
+  const hand2 = new Hand(players, { sb: 10, bb: 20, button: 0, handNo: 2, raiseQuota: true }, () => {});
+  hand2.phase = 'betting';
+  hand2.street = 'flop';
+  hand2.board = [0, 5, 10];
+  for (const p of hand2.players) { p.acted = false; p.streetCommit = 0; }
+  hand2._setActor(hand2.players[0]);
+  const ra1 = hand2.applyAction(0, 'raise', 40);
+  assert(ra1.ok, '配给内首次加注成功');
+  hand2.players[0].streetRaised = true;
+  assert(hand2.options(hand2.players[0]).canRaise === false, '配给用尽后 options.canRaise=false');
+  hand2.actor = hand2.players[0];
+  hand2.players[0]._awaiting = true;
+  const ra2 = hand2.applyAction(0, 'raise', 40);
+  assert(!ra2.ok && ra2.err === 'raise_quota', '配给用尽后加注被拒');
+  // 技能：翻牌前弃牌退款
+  const hand3 = new Hand(players, { sb: 10, bb: 20, button: 0, handNo: 3, foldRefundSeat: 0 }, () => {});
+  hand3.phase = 'betting';
+  const me = hand3.players[0];
+  me.chips -= 20; me.commitTotal = 20; me.streetCommit = 20; // 模拟已下大盲
+  hand3.currentBet = 20;
+  hand3.actor = me; me._awaiting = true;
+  const chipsBefore = me.chips;
+  const rf = hand3.applyAction(0, 'fold');
+  assert(rf.ok && rf.refund === true, '退款标记存在');
+  assert(me.chips === chipsBefore + 20 && me.commitTotal === 0, '技能退款：翻牌前弃牌拿回盲注');
 }
 
 console.log(fails === 0 ? 'lobby 校验全部通过 ✓' : `lobby 校验有 ${fails} 项失败 ✗`);
