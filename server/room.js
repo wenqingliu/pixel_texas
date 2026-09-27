@@ -367,6 +367,16 @@ export class Room {
           this.lobby.recordPlayerStats(d.token, d);
         }
       }
+      // 房间内画像（名字维度，含机器人）：大师档据此针对性决策
+      for (const d of ev.players) {
+        const p2 = this.hand.bySeat(d.seat);
+        if (!p2) continue;
+        const st = this.stats.get(p2.name) || { hands: 0, wins: 0, net: 0, vpip: 0, aggr: 0, calls: 0 };
+        if (d.vpip) st.vpip++;
+        st.aggr += d.aggr || 0;
+        st.calls += d.calls || 0;
+        this.stats.set(p2.name, st);
+      }
     } else if (ev.kind === 'showdown') {
       this.lastResults = { board: ev.board, pots: ev.pots, results: ev.results, uncontested: ev.uncontested, handNo: this.handNo };
       // 兔猎：无人跟注且公牌未发满时，记录本会发出的剩余公牌
@@ -420,7 +430,7 @@ export class Room {
     if (this.closed) return;
     const hand = this.hand;
     if (!hand || hand.phase !== 'betting' || hand.awaitingSeat() !== p.seat) return;
-    const d = botDecide(p, hand);
+    const d = botDecide(p, hand, this.stats); // 传入房间内对手画像
     const res = hand.applyAction(p.seat, d.type, d.amount);
     if (!res.ok) hand.autoAction(p.seat); // 决策异常时托管兜底
   }

@@ -79,9 +79,10 @@ function boardWetness(board) {
  * 机器人决策入口
  * @param p 参与者（含 cards/chips/level）
  * @param hand Hand 实例
+ * @param reads 房间内对手画像 Map（name → {hands, vpip, aggr, calls}），可空
  * @returns {type, amount?}
  */
-export function botDecide(p, hand) {
+export function botDecide(p, hand, reads = null) {
   const o = hand.options(p);
   const street = hand.street;
   const nAlive = hand.alive().length;
@@ -92,6 +93,21 @@ export function botDecide(p, hand) {
   const bb = hand.bb;
   const stackBB = p.chips / bb;
   const r = Math.random();
+
+  // 对手画像：可样本对手（≥8 手）的平均 VPIP / 激进度
+  let oppN = 0, oppVpipSum = 0;
+  if (reads) {
+    for (const q of hand.alive()) {
+      if (q === p) continue;
+      const rd = reads.get(q.name);
+      if (rd && rd.hands >= 8) { oppN++; oppVpipSum += rd.vpip / rd.hands; }
+    }
+  }
+  const oppVpip = oppN > 0 ? oppVpipSum / oppN : 0.32;
+  const oppStation = oppN > 0 && oppVpip > 0.55;  // 跟注站：诈唬几乎打不走
+  const oppLoose = oppN > 0 && oppVpip > 0.45;    // 松：可以多诈
+  const oppTight = oppN > 0 && oppVpip < 0.25;    // 紧：少诈、多偷
+  const bluffMod = oppStation ? 0.3 : oppLoose ? 1.25 : oppTight ? 0.75 : 1;
 
   const sims = SIMS[level];
   const nOpp = Math.max(1, nAlive - 1);
@@ -136,7 +152,7 @@ export function botDecide(p, hand) {
     const adj = latePos ? 0.08 : 0;
     if (toCall === 0) {
       if (edge > 1.5 && r < 0.75) return raiseTo(Math.max(bb * 2.5, pot * (0.5 + eq * 0.35)));
-      if (edge < 0.85 && r < 0.1 && nAlive <= 4) return raiseTo(Math.max(bb * 2.5, pot * 0.55)); // 诈唬
+      if (edge < 0.85 && r < (oppStation ? 0.04 : 0.1) && nAlive <= 4) return raiseTo(Math.max(bb * 2.5, pot * 0.55)); // 诈唬（跟注站几乎不诈）
       return { type: 'check' };
     }
     if (stackBB < 12 && edge > 1.45) return raiseTo(o.maxRaiseTo); // 短码全下
@@ -166,10 +182,10 @@ export function botDecide(p, hand) {
     // 价值下注
     if (edge > 2.4 && r < 0.8) return raiseTo(Math.max(bb * 3, pot * (eq > 0.85 && r < 0.4 ? 0.5 : 0.75))); // 大牌偶尔慢打半池
     if (edge > 1.6 && r < 0.72) return raiseTo(Math.max(bb * 2.5, pot * 0.66));
-    // 半诈唬 / 诈唬：少人池 + 干燥牌面更容易成功
-    const bluffFreq = (wet < 0.35 ? 0.2 : 0.1) * (multiway ? 0.4 : 1);
+    // 半诈唬 / 诈唬：少人池 + 干燥牌面更容易成功；对着跟注站大幅收敛
+    const bluffFreq = (wet < 0.35 ? 0.2 : 0.1) * (multiway ? 0.4 : 1) * bluffMod;
     if (edge < 1.1 && r < bluffFreq) return raiseTo(Math.max(bb * 2.5, pot * 0.6));
-    if (eq > 0.42 && eq < 0.55 && r < 0.5 && !multiway) return raiseTo(Math.max(bb * 2.5, pot * 0.55)); // 半诈唬
+    if (eq > 0.42 && eq < 0.55 && r < 0.5 * bluffMod && !multiway) return raiseTo(Math.max(bb * 2.5, pot * 0.55)); // 半诈唬
     return { type: 'check' };
   }
 
